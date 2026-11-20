@@ -11,7 +11,6 @@ export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 const DEFAULT_KEYS = [
   '4e44d9029b1270a757cddc766a1bcb63',
   '2dca580c2a14b55200e784d157207b4d',
-  'f8e1a03e3a8de34e791b585324df2de2',
 ];
 
 let currentKeyIndex = 0;

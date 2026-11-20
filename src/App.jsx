@@ -167,9 +167,9 @@ export default function App() {
     }
   }, [selectedGenre, activeTab]);
 
-  // Load MovieBox & Scraped Datasets
+  // Load MovieBox & Scraped Datasets immediately on mount
   useEffect(() => {
-    if (activeTab === 'moviebox' && !movieBoxCatalog) {
+    if (!movieBoxCatalog) {
       setMovieBoxLoading(true);
       Promise.all([
         MovieBoxService.getFullCatalog(),
@@ -183,7 +183,7 @@ export default function App() {
         setMovieBoxLoading(false);
       });
     }
-  }, [activeTab, movieBoxCatalog]);
+  }, [movieBoxCatalog]);
 
   // Watchlist handlers
   const handleToggleWatchlist = (item) => {
@@ -214,26 +214,28 @@ export default function App() {
   // Navigates to CinemaOS-style Watch Page
   const handlePlayMovie = (item) => {
     if (!item) return;
+    const playId = item.tmdbId || item.id;
     if (item.isDubIndo) {
       navigate(`/watch/dub/${item.id}`);
-    } else if (item.media_type === 'tv' || item.category === 'Film Series' || (item.episodes && item.episodes.length > 0)) {
+    } else if (item.media_type === 'tv' || item.type === 'series' || item.category === 'Film Series' || (item.episodes && item.episodes.length > 0)) {
       const s = item.selectedSeason || item.season || 1;
       const e = item.selectedEpisode || item.episode || 1;
-      navigate(`/watch/tv/${item.id}/${s}/${e}`);
+      navigate(`/watch/tv/${playId}/${s}/${e}`);
     } else {
-      navigate(`/watch/movie/${item.id}`);
+      navigate(`/watch/movie/${playId}`);
     }
   };
 
   // Navigates to dedicated Detail Page (Full Page, no popup modal)
   const handleOpenDetail = (item) => {
     if (!item) return;
+    const detailId = item.tmdbId || item.id;
     if (item.isDubIndo || String(item.id).startsWith('dub_')) {
       navigate(`/dub/${item.id}`);
-    } else if (item.media_type === 'tv' || item.category === 'Film Series' || item.first_air_date || (item.episodes && item.episodes.length > 0)) {
-      navigate(`/tv/${item.id}`);
+    } else if (item.media_type === 'tv' || item.type === 'series' || item.category === 'Film Series' || item.first_air_date || (item.episodes && item.episodes.length > 0)) {
+      navigate(`/tv/${detailId}`);
     } else {
-      navigate(`/movie/${item.id}`);
+      navigate(`/movie/${detailId}`);
     }
   };
 
@@ -334,6 +336,23 @@ export default function App() {
                       onToggleWatchlist={handleToggleWatchlist}
                       onExploreMore={() => setActiveTab('dubindo')}
                     />
+
+                    {/* Film & Series Indonesia Terbaru di Netflix 🇮🇩 */}
+                    {movieBoxCatalog?.indo_netflix?.length > 0 && (
+                      <ContentRail
+                        title="Film & Series Indonesia Terbaru di Netflix 🇮🇩"
+                        subtitle="Rilis film bioskop Indonesia resmi di Netflix (The Shadow Strays, Kabut Berduri, Agak Laen, Siksa Kubur)"
+                        items={movieBoxCatalog.indo_netflix}
+                        onMovieClick={handleOpenDetail}
+                        onPlayClick={handlePlayMovie}
+                        watchlistIds={watchlistIds}
+                        onToggleWatchlist={handleToggleWatchlist}
+                        onExploreMore={() => {
+                          setActiveTab('moviebox');
+                          setMovieBoxSubFilter('netflix');
+                        }}
+                      />
+                    )}
 
                     <ContentRail
                       title="Film Bioskop Terpopuler"

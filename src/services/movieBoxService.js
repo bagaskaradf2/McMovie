@@ -95,7 +95,7 @@ export const MovieBoxService = {
     try {
       const fallback = await TmdbService.discoverByGenre('movie', null);
       return (fallback || []).map(m => ({
-        id: `in_${m.id}`,
+        id: m.id,
         tmdbId: m.id,
         title: m.title,
         poster: m.poster_path ? TmdbService.getImageUrl(m.poster_path, 'w500') : '',

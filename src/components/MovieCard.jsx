@@ -14,12 +14,14 @@ export default function MovieCard({
   if (!item) return null;
 
   const title = item.title || item.name || 'Untitled';
-  const rawPoster = item.poster_path || item.thumbnail;
+  const rawPoster = item.poster_path || item.poster || item.thumbnail || item.cover || item.image;
   
   let posterUrl = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
   if (rawPoster) {
     if (rawPoster.startsWith('http')) {
       posterUrl = rawPoster.replace('stream.dubbindo.site', 'ik.imagekit.io/uvideo');
+    } else if (rawPoster.startsWith('/images/') || rawPoster.startsWith('./images/')) {
+      posterUrl = rawPoster;
     } else {
       posterUrl = TmdbService.getImageUrl(rawPoster, 'w500');
     }

@@ -91,8 +91,28 @@ export default function DetailPage({ type: propType }) {
           }
           setLoading(false);
         })
-        .catch((err) => {
-          console.error('Failed to load details for detail page:', err);
+        .catch(async (err) => {
+          console.error('Failed to load details from TMDB:', err);
+          try {
+            const catalogRes = await fetch('/data/moviebox_catalog.json');
+            const cat = await catalogRes.json();
+            const allItems = [
+              ...(cat.trending_drama || []),
+              ...(cat.trending_movies || []),
+              ...(cat.indo_netflix || []),
+              ...(cat.sinetron_series || [])
+            ];
+            const found = allItems.find(i => String(i.id) === String(id) || String(i.tmdbId) === String(id));
+            if (found && isMounted) {
+              setItem(found);
+              setDetails(found);
+              setIsWatchlisted(StorageService.isWatchlisted(found.id));
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('Fallback catalog search error:', e);
+          }
           if (isMounted) setLoading(false);
         });
     }
@@ -106,9 +126,30 @@ export default function DetailPage({ type: propType }) {
     setLoadingSeason(true);
     try {
       const data = await TmdbService.getSeasonDetails(tvId, sNum);
-      setSeasonData(data);
+      if (data && data.episodes && data.episodes.length > 0) {
+        setSeasonData(data);
+      } else if (item?.episodes && typeof item.episodes === 'number') {
+        const genEps = Array.from({ length: item.episodes }, (_, i) => ({
+          episode_number: i + 1,
+          name: `Episode ${i + 1}`,
+          overview: `Episode ${i + 1} dari ${item.title || item.name || 'Serial'}`,
+          still_path: item.backdrop_path || item.poster_path
+        }));
+        setSeasonData({ episodes: genEps, season_number: sNum });
+      } else {
+        setSeasonData(data);
+      }
     } catch (e) {
-      console.error('Failed to fetch season:', e);
+      console.warn('Could not fetch season from TMDB:', e);
+      if (item?.episodes && typeof item.episodes === 'number') {
+        const genEps = Array.from({ length: item.episodes }, (_, i) => ({
+          episode_number: i + 1,
+          name: `Episode ${i + 1}`,
+          overview: `Episode ${i + 1} dari ${item.title || item.name || 'Serial'}`,
+          still_path: item.backdrop_path || item.poster_path
+        }));
+        setSeasonData({ episodes: genEps, season_number: sNum });
+      }
     } finally {
       setLoadingSeason(false);
     }
@@ -209,9 +250,11 @@ export default function DetailPage({ type: propType }) {
     ? (item.episodes || [])
     : (seasonData?.episodes || data.episodes || []);
 
-  const validSeasons = data?.seasons && data.seasons.length > 0
+  const validSeasons = Array.isArray(data?.seasons) && data.seasons.length > 0
     ? data.seasons.filter(s => s.season_number > 0)
-    : [{ id: 1, season_number: 1, name: 'Season 1' }];
+    : (typeof data?.seasons === 'number' && data.seasons > 0
+        ? Array.from({ length: data.seasons }, (_, i) => ({ id: i + 1, season_number: i + 1, name: `Season ${i + 1}` }))
+        : [{ id: 1, season_number: 1, name: 'Season 1' }]);
 
   return (
     <div className="min-h-screen bg-[#06070a] text-white selection:bg-white selection:text-black">

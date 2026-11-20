@@ -281,8 +281,27 @@ export default function WatchPage({
             fetchSeason(propId, currentSeason);
           }
         })
-        .catch((err) => {
-          console.error('Failed to load details for watch page:', err);
+        .catch(async (err) => {
+          console.error('Failed to load details from TMDB:', err);
+          try {
+            const catalogRes = await fetch('/data/moviebox_catalog.json');
+            const cat = await catalogRes.json();
+            const allItems = [
+              ...(cat.trending_drama || []),
+              ...(cat.trending_movies || []),
+              ...(cat.indo_netflix || []),
+              ...(cat.sinetron_series || [])
+            ];
+            const found = allItems.find(i => String(i.id) === String(propId) || String(i.tmdbId) === String(propId));
+            if (found && isMounted) {
+              setItem(found);
+              setIsWatchlisted(StorageService.isWatchlisted(found.id));
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('Fallback catalog search error:', e);
+          }
           if (isMounted) setLoading(false);
         });
     }
@@ -296,9 +315,30 @@ export default function WatchPage({
     setLoadingSeason(true);
     try {
       const data = await TmdbService.getSeasonDetails(tvId, sNum);
-      setSeasonData(data);
+      if (data && data.episodes && data.episodes.length > 0) {
+        setSeasonData(data);
+      } else if (item?.episodes && typeof item.episodes === 'number') {
+        const genEps = Array.from({ length: item.episodes }, (_, i) => ({
+          episode_number: i + 1,
+          name: `Episode ${i + 1}`,
+          overview: `Episode ${i + 1} dari ${item.title || item.name || 'Serial'}`,
+          still_path: item.backdrop_path || item.poster_path
+        }));
+        setSeasonData({ episodes: genEps, season_number: sNum });
+      } else {
+        setSeasonData(data);
+      }
     } catch (e) {
-      console.error('Failed to fetch season:', e);
+      console.warn('Could not fetch season from TMDB:', e);
+      if (item?.episodes && typeof item.episodes === 'number') {
+        const genEps = Array.from({ length: item.episodes }, (_, i) => ({
+          episode_number: i + 1,
+          name: `Episode ${i + 1}`,
+          overview: `Episode ${i + 1} dari ${item.title || item.name || 'Serial'}`,
+          still_path: item.backdrop_path || item.poster_path
+        }));
+        setSeasonData({ episodes: genEps, season_number: sNum });
+      }
     } finally {
       setLoadingSeason(false);
     }
@@ -639,11 +679,13 @@ export default function WatchPage({
   const currentEpInfo = episodesList.find(e => (e.episode_number || e.episode) === currentEpisode);
   const currentEpTitle = currentEpInfo?.name || `Episode ${currentEpisode}`;
 
-  const validSeasons = item.seasons && item.seasons.length > 0
+  const validSeasons = Array.isArray(item?.seasons) && item.seasons.length > 0
     ? item.seasons.filter(s => s.season_number > 0)
-    : [{ id: 1, season_number: 1, name: 'Season 1' }];
+    : (typeof item?.seasons === 'number' && item.seasons > 0
+        ? Array.from({ length: item.seasons }, (_, i) => ({ id: i + 1, season_number: i + 1, name: `Season ${i + 1}` }))
+        : [{ id: 1, season_number: 1, name: 'Season 1' }]);
 
-  const resolvedTargetId = item.isDubIndo ? (item.tmdbId || item.rawId) : (item.id || propId);
+  const resolvedTargetId = item?.isDubIndo ? (item.tmdbId || item.rawId) : (item?.tmdbId || item?.id || propId);
   const embedUrl = (activeServer === 'dub_embed' && item?.embedToken)
     ? `https://www.dubbindo.site/embed/${item.embedToken}`
     : getEmbedUrl(activeServer, resolvedTargetId, isSeries ? 'tv' : 'movie', currentSeason, currentEpisode);
