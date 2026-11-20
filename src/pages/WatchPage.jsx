@@ -71,6 +71,7 @@ export default function WatchPage({
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLandscapeMode, setIsLandscapeMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isScreenLocked, setIsScreenLocked] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -453,12 +454,31 @@ export default function WatchPage({
         }
       } catch (e) {}
 
+      if (screen.orientation && screen.orientation.unlock) {
+        try { screen.orientation.unlock(); } catch (e) {}
+      }
+
       if (videoRef.current && typeof videoRef.current.webkitExitFullscreen === 'function') {
         try { videoRef.current.webkitExitFullscreen(); } catch (e) {}
       }
 
       setIsFullscreen(false);
+      setIsLandscapeMode(false);
       return;
+    }
+
+    // Check if mobile / portrait orientation
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const isMobile = /iPad|iPhone|iPod|Android/.test(navigator.userAgent) || (window.innerWidth < 768);
+
+    // Request screen orientation lock if supported by browser
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
+
+    // Automatically enable landscape horizontal rotation mode if entering fullscreen in portrait
+    if (isPortrait && isMobile) {
+      setIsLandscapeMode(true);
     }
 
     // 2. Check if iOS device (iPhone / iPad / iPod)
@@ -498,6 +518,21 @@ export default function WatchPage({
     // 4. Guaranteed CSS Viewport Fullscreen fallback (always works on iPhone Safari & iframes)
     setIsFullscreen(true);
   };
+
+  // Auto reset landscape CSS rotation when user physically turns device to horizontal
+  useEffect(() => {
+    const handleOrientationOrResize = () => {
+      if (window.innerWidth > window.innerHeight) {
+        setIsLandscapeMode(false);
+      }
+    };
+    window.addEventListener('resize', handleOrientationOrResize);
+    window.addEventListener('orientationchange', handleOrientationOrResize);
+    return () => {
+      window.removeEventListener('resize', handleOrientationOrResize);
+      window.removeEventListener('orientationchange', handleOrientationOrResize);
+    };
+  }, []);
 
   // Lock body scroll when fullscreen is active (critical for iPhone Safari viewport lock)
   useEffect(() => {
@@ -715,23 +750,41 @@ export default function WatchPage({
           ref={containerRef}
           className={`${
             isFullscreen
-              ? 'fixed inset-0 z-[99999] w-full h-[100dvh] bg-black rounded-none border-0'
+              ? isLandscapeMode
+                ? 'fixed z-[99999] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100dvh] h-[100dvw] rotate-90 origin-center bg-black rounded-none border-0'
+                : 'fixed inset-0 z-[99999] w-full h-[100dvh] bg-black rounded-none border-0'
               : 'relative w-full aspect-video sm:h-[65vh] md:h-[78vh] max-h-[85vh] bg-black rounded-2xl md:rounded-3xl border border-white/10'
           } overflow-hidden shadow-2xl transition-all flex items-center justify-center group select-none`}
         >
-          {/* Floating Exit Fullscreen Button (Always accessible on iOS and Desktop) */}
+          {/* Floating Controls When Fullscreen */}
           {isFullscreen && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggleFullscreen();
-              }}
-              className="fixed top-4 right-4 z-[100000] px-4 py-2 rounded-full bg-black/85 hover:bg-black text-white text-xs font-bold border border-white/20 backdrop-blur-md shadow-2xl flex items-center gap-2 transition-all active:scale-95"
-              title="Keluar Layar Penuh"
-            >
-              <Minimize className="w-4 h-4" />
-              <span>Keluar Layar Penuh</span>
-            </button>
+            <>
+              {/* Rotate Landscape / Portrait Toggle Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLandscapeMode(prev => !prev);
+                }}
+                className="fixed top-4 left-4 z-[100000] px-3.5 py-2 rounded-full bg-black/85 hover:bg-black text-white text-xs font-bold border border-white/20 backdrop-blur-md shadow-2xl flex items-center gap-1.5 transition-all active:scale-95"
+                title="Putar Orientasi Layar (Horizontal/Vertikal)"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{isLandscapeMode ? 'Vertikal' : 'Horizontal'}</span>
+              </button>
+
+              {/* Floating Exit Fullscreen Button (Always accessible on iOS and Desktop) */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleFullscreen();
+                }}
+                className="fixed top-4 right-4 z-[100000] px-4 py-2 rounded-full bg-black/85 hover:bg-black text-white text-xs font-bold border border-white/20 backdrop-blur-md shadow-2xl flex items-center gap-2 transition-all active:scale-95"
+                title="Keluar Layar Penuh"
+              >
+                <Minimize className="w-4 h-4" />
+                <span>Keluar Layar Penuh</span>
+              </button>
+            </>
           )}
 
           {/* Ambient Glow */}

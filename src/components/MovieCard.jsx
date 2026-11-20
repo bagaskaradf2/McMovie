@@ -71,7 +71,19 @@ export default function MovieCard({
 
         {/* Minimalist Top Badges */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
-          {item.isDubIndo ? (
+          {item.badge ? (
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide backdrop-blur-md shadow-md ${
+              item.badge === 'Limited Free'
+                ? 'bg-emerald-500 text-black font-extrabold'
+                : item.badge.includes('Netflix')
+                  ? 'bg-red-600/90 text-white'
+                  : item.badge.includes('Disney')
+                    ? 'bg-blue-600/90 text-white'
+                    : 'bg-black/70 text-zinc-200 border border-white/15'
+            }`}>
+              {item.badge}
+            </span>
+          ) : item.isDubIndo ? (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 backdrop-blur-md">
               Dub Indo
             </span>

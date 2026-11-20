@@ -2,7 +2,71 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Film, Tv, Sparkles, Globe, Filter } from 'lucide-react';
 import { TmdbService } from '../services/tmdbService';
 import { DubIndoService } from '../services/dubIndoService';
+import { MovieBoxService } from '../services/movieBoxService';
 import MovieCard from './MovieCard';
+
+// Smart normalizer to group series episodes/seasons under a single unified title
+function normalizeSeriesTitle(rawTitle) {
+  if (!rawTitle) return '';
+  let title = rawTitle.toLowerCase();
+  return title
+    .replace(/\b(season|s)\s*\d+\b/gi, '')
+    .replace(/\b(episode|ep)\s*\d+\b/gi, '')
+    .replace(/\bpart\s*\d+\b/gi, '')
+    .replace(/\b(dub\s*indo|dubbing\s*indonesia|indonesian\s*dub)\b/gi, '')
+    .replace(/\[.*?\]|\(.*?\)/g, '')
+    .replace(/[:\-–—]\s*(the\s*)?(final|first|second|third|fourth)?\s*(season|part|arc)?$/gi, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Groups separated episodes/seasons into a single consolidated master series card
+function mergeAndDeduplicateSeries(items) {
+  if (!Array.isArray(items)) return [];
+
+  const seenMap = new Map();
+  const result = [];
+
+  for (const item of items) {
+    if (!item) continue;
+    const isSeries = item.media_type === 'tv' || item.category === 'Film Series' || (item.episodes && item.episodes.length > 0) || Boolean(item.first_air_date);
+
+    if (isSeries) {
+      const rawTitle = item.title || item.name || '';
+      const normTitle = normalizeSeriesTitle(rawTitle);
+      const groupKey = item.tmdbId ? `tmdb_${item.tmdbId}` : `series_${normTitle}`;
+
+      if (seenMap.has(groupKey)) {
+        // Merge into existing series item
+        const existing = seenMap.get(groupKey);
+        if (!existing.poster_path && item.poster_path) {
+          existing.poster_path = item.poster_path;
+        }
+        if (!existing.isDubIndo && item.isDubIndo) {
+          existing.hasDubIndo = true;
+        }
+        if (item.episodes && Array.isArray(item.episodes)) {
+          existing.episodes = [...(existing.episodes || []), ...item.episodes];
+        }
+        continue;
+      } else {
+        const mergedItem = { ...item, media_type: 'tv' };
+        seenMap.set(groupKey, mergedItem);
+        result.push(mergedItem);
+      }
+    } else {
+      const rawTitle = (item.title || item.name || '').toLowerCase().trim();
+      const movieKey = item.id ? `movie_${item.id}` : `movie_${rawTitle}`;
+      if (!seenMap.has(movieKey)) {
+        seenMap.set(movieKey, item);
+        result.push(item);
+      }
+    }
+  }
+
+  return result;
+}
 
 const QUICK_TAGS = [
   'Deadpool & Wolverine',
@@ -58,11 +122,16 @@ export default function SearchModal({
         if (filterType === 'dubindo') {
           // Search only Dub Indo
           combined = await DubIndoService.searchDubIndo(query);
+        } else if (filterType === 'moviebox') {
+          // Search MovieBox catalog
+          const mbRes = await MovieBoxService.search(query);
+          combined = mbRes || [];
         } else {
-          // Search both TMDB and Dub Indo
-          const [tmdbRes, dubRes] = await Promise.all([
+          // Search across TMDB, Dub Indo, and MovieBox
+          const [tmdbRes, dubRes, mbRes] = await Promise.all([
             TmdbService.searchMulti(query),
             DubIndoService.searchDubIndo(query),
+            MovieBoxService.search(query).catch(() => []),
           ]);
 
           let filteredTmdb = tmdbRes || [];
@@ -72,11 +141,17 @@ export default function SearchModal({
             filteredTmdb = filteredTmdb.filter(i => i.media_type === 'tv');
           }
 
-          // Prioritize relevant dub indo titles if searched
-          combined = [...dubRes.slice(0, 10), ...filteredTmdb];
+          // Prioritize relevant dub indo titles and moviebox items
+          combined = [
+            ...dubRes.slice(0, 10),
+            ...(mbRes || []).slice(0, 10),
+            ...filteredTmdb
+          ];
         }
 
-        setResults(combined);
+        // SMART CONSOLIDATION: Merge and group separated series/seasons into a single unified title
+        const deduplicated = mergeAndDeduplicateSeries(combined);
+        setResults(deduplicated);
       } catch (err) {
         console.error('Search error:', err);
       } finally {
@@ -130,8 +205,9 @@ export default function SearchModal({
           {[
             { id: 'all', label: 'Semua Koleksi' },
             { id: 'movie', label: 'Movies' },
-            { id: 'tv', label: 'TV Shows' },
+            { id: 'tv', label: 'TV Series' },
             { id: 'dubindo', label: '🇮🇩 Dub Indo Saja' },
+            { id: 'moviebox', label: '⚡ MovieBox' },
           ].map((tab) => (
             <button
               key={tab.id}
