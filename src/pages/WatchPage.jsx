@@ -54,8 +54,6 @@ export default function WatchPage({
   const [seasonData, setSeasonData] = useState(null);
   const [loadingSeason, setLoadingSeason] = useState(false);
 
-  const [episodeViewMode, setEpisodeViewMode] = useState('list'); // 'list' (Image 3) or 'grid' (Image 6)
-
   // Streaming Server state
   const [activeServer, setActiveServer] = useState('vidlink');
   const [reloadKey, setReloadKey] = useState(0);
@@ -443,19 +441,112 @@ export default function WatchPage({
     }
   };
 
+  // Handle Fullscreen across Desktop, Android, and iOS iPhone Safari
   const handleToggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      if (containerRef.current?.requestFullscreen) {
-        containerRef.current.requestFullscreen();
+    // 1. If currently fullscreen (either native or CSS viewport fullscreen), exit
+    if (isFullscreen) {
+      try {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      } catch (e) {}
+
+      if (videoRef.current && typeof videoRef.current.webkitExitFullscreen === 'function') {
+        try { videoRef.current.webkitExitFullscreen(); } catch (e) {}
       }
-      setIsFullscreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
+
       setIsFullscreen(false);
+      return;
     }
+
+    // 2. Check if iOS device (iPhone / iPad / iPod)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    // If on iOS and playing native video, try native webkitEnterFullscreen first
+    if (isIOS && videoRef.current && typeof videoRef.current.webkitEnterFullscreen === 'function') {
+      try {
+        videoRef.current.webkitEnterFullscreen();
+        setIsFullscreen(true);
+        return;
+      } catch (err) {
+        console.warn('iOS webkitEnterFullscreen error, fallback to pseudo-fullscreen:', err);
+      }
+    }
+
+    // 3. For Desktop and Android, try standard HTML5 Fullscreen API
+    const elem = containerRef.current;
+    if (!isIOS && elem) {
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen()
+          .then(() => setIsFullscreen(true))
+          .catch(() => setIsFullscreen(true));
+        return;
+      } else if (elem.webkitRequestFullscreen) {
+        try {
+          elem.webkitRequestFullscreen();
+          setIsFullscreen(true);
+          return;
+        } catch (e) {
+          console.warn('webkitRequestFullscreen failed:', e);
+        }
+      }
+    }
+
+    // 4. Guaranteed CSS Viewport Fullscreen fallback (always works on iPhone Safari & iframes)
+    setIsFullscreen(true);
   };
+
+  // Lock body scroll when fullscreen is active (critical for iPhone Safari viewport lock)
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [isFullscreen]);
+
+  // Listen for native Fullscreen events (including iOS WebKit)
+  useEffect(() => {
+    const handleFsChange = () => {
+      const isFull = Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(isFull);
+    };
+
+    const video = videoRef.current;
+    const onIosFsBegin = () => setIsFullscreen(true);
+    const onIosFsEnd = () => setIsFullscreen(false);
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+
+    if (video) {
+      video.addEventListener('webkitbeginfullscreen', onIosFsBegin);
+      video.addEventListener('webkitendfullscreen', onIosFsEnd);
+    }
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      if (video) {
+        video.removeEventListener('webkitbeginfullscreen', onIosFsBegin);
+        video.removeEventListener('webkitendfullscreen', onIosFsEnd);
+      }
+    };
+  }, [useDirectPlayer]);
 
   if (loading) {
     return (
@@ -622,8 +713,27 @@ export default function WatchPage({
 
         <div
           ref={containerRef}
-          className="relative w-full aspect-video sm:h-[65vh] md:h-[78vh] max-h-[85vh] bg-black overflow-hidden shadow-2xl transition-all rounded-2xl md:rounded-3xl border border-white/10 flex items-center justify-center group select-none"
+          className={`${
+            isFullscreen
+              ? 'fixed inset-0 z-[99999] w-full h-[100dvh] bg-black rounded-none border-0'
+              : 'relative w-full aspect-video sm:h-[65vh] md:h-[78vh] max-h-[85vh] bg-black rounded-2xl md:rounded-3xl border border-white/10'
+          } overflow-hidden shadow-2xl transition-all flex items-center justify-center group select-none`}
         >
+          {/* Floating Exit Fullscreen Button (Always accessible on iOS and Desktop) */}
+          {isFullscreen && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleFullscreen();
+              }}
+              className="fixed top-4 right-4 z-[100000] px-4 py-2 rounded-full bg-black/85 hover:bg-black text-white text-xs font-bold border border-white/20 backdrop-blur-md shadow-2xl flex items-center gap-2 transition-all active:scale-95"
+              title="Keluar Layar Penuh"
+            >
+              <Minimize className="w-4 h-4" />
+              <span>Keluar Layar Penuh</span>
+            </button>
+          )}
+
           {/* Ambient Glow */}
           <div className="absolute -inset-4 bg-gradient-to-r from-red-600/10 via-purple-600/10 to-blue-600/10 rounded-3xl opacity-30 blur-3xl pointer-events-none -z-10" />
 
@@ -640,6 +750,8 @@ export default function WatchPage({
                 src={currentDirectStream}
                 autoPlay
                 playsInline
+                webkit-playsinline="true"
+                x5-playsinline="true"
                 className="w-full h-full object-contain bg-black"
                 onTimeUpdate={() => {
                   if (videoRef.current) {
@@ -741,9 +853,9 @@ export default function WatchPage({
                         handleToggleFullscreen();
                       }}
                       className="p-2 rounded-xl bg-black/40 hover:bg-black/70 text-zinc-300 border border-white/10 backdrop-blur-md transition-all"
-                      title="Layar Penuh"
+                      title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
                     >
-                      <Maximize className="w-4 h-4" />
+                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -930,9 +1042,9 @@ export default function WatchPage({
                           handleToggleFullscreen();
                         }}
                         className="text-white hover:text-zinc-300 transition-colors p-1"
-                        title="Layar Penuh"
+                        title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
                       >
-                        <Maximize className="w-5 h-5" />
+                        {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
                       </button>
                     </div>
                   </div>
@@ -1021,6 +1133,15 @@ export default function WatchPage({
           </div>
 
           <div className="flex items-center gap-2 flex-none">
+            <button
+              onClick={handleToggleFullscreen}
+              className="px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95"
+              title={isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
+            >
+              {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+              <span>{isFullscreen ? 'Keluar Fullscreen' : 'Layar Penuh'}</span>
+            </button>
+
             <button
               onClick={() => setReloadKey(p => p + 1)}
               className="px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95"
@@ -1130,60 +1251,38 @@ export default function WatchPage({
 
         {/* 
           ========================================================================
-          SECTION 2: DAFTAR EPISODE (Exact match to Reference Image media_1795179812355_f31e24be.png)
+          SECTION 2: DAFTAR EPISODE (Exact match to Reference Image)
           ========================================================================
         */}
         {isSeries && (
           <div className="mt-8 border-b border-white/[0.08] pb-8">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-              <div className="flex items-center gap-3">
-                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 tracking-tight">
-                  <Tv className="w-5 h-5 text-white" />
-                  <span>Daftar Episode</span>
-                </h3>
+              <h3 className="text-sm sm:text-base font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                <Tv className="w-4 h-4 text-white" />
+                <span>DAFTAR EPISODE</span>
+              </h3>
 
-                {/* View switcher: Image 3 List vs Image 6 Grid */}
-                <div className="hidden sm:flex items-center gap-1 p-0.5 bg-black/40 rounded-lg border border-white/10 text-xs">
-                  <button
-                    onClick={() => setEpisodeViewMode('list')}
-                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                      episodeViewMode === 'list' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    List
-                  </button>
-                  <button
-                    onClick={() => setEpisodeViewMode('grid')}
-                    className={`px-2.5 py-1 rounded-md font-bold transition-all ${
-                      episodeViewMode === 'grid' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Grid
-                  </button>
-                </div>
-              </div>
-
-              {/* Season Selector Tabs: S1, S2, S3, S4 exact match to Reference Image 3 */}
+              {/* Season Selector Tabs */}
               {validSeasons.length > 0 && (
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                   {validSeasons.map((s) => (
                     <button
                       key={s.id || s.season_number}
                       onClick={() => handleSeasonChange(s.season_number)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                         currentSeason === s.season_number
-                          ? 'bg-white text-black font-extrabold shadow-md scale-105'
-                          : 'bg-[#1c1e27] hover:bg-[#252834] text-zinc-300'
+                          ? 'bg-white text-black shadow-sm font-extrabold'
+                          : 'bg-[#181920] hover:bg-[#20222b] text-zinc-300'
                       }`}
                     >
-                      S{s.season_number}
+                      Season {s.season_number}
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Episodes List / Grid */}
+            {/* Episodes 3-Column Responsive Grid */}
             {loadingSeason ? (
               <div className="py-16 text-center text-xs text-zinc-400 animate-pulse flex flex-col items-center justify-center gap-2.5">
                 <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-white animate-spin" />
@@ -1193,67 +1292,14 @@ export default function WatchPage({
               <div className="py-10 text-center text-xs text-zinc-400 bg-black/20 rounded-xl border border-white/5 p-4">
                 Daftar episode tidak tersedia untuk season ini di database.
               </div>
-            ) : episodeViewMode === 'list' ? (
-              /* Sleek Image 3 List View */
-              <div className="space-y-2.5 max-w-4xl">
-                {episodesList.map((ep, idx) => {
-                  const epNum = ep.episode_number || ep.episode || (idx + 1);
-                  const epTitle = ep.name || ep.title || `Episode ${epNum}`;
-                  const isCurrentActive = epNum === currentEpisode;
-
-                  return isCurrentActive ? (
-                    <div
-                      key={ep.id || epNum}
-                      onClick={() => handleEpisodeChange(epNum)}
-                      className="w-full p-3.5 sm:p-4 rounded-2xl bg-white text-black flex items-center justify-between shadow-2xl transition-all cursor-pointer group hover:scale-[1.005]"
-                    >
-                      <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 pr-3">
-                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-black text-white font-extrabold flex items-center justify-center text-sm flex-none shadow-md">
-                          {epNum}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-sm sm:text-base font-extrabold text-black truncate tracking-tight">
-                            {epTitle}
-                          </h4>
-                          <p className="text-xs text-zinc-600 line-clamp-1 mt-0.5 font-medium">
-                            {ep.overview || 'Tonton episode ini sekarang dalam kualitas HD.'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex-none pr-1">
-                        <Play className="w-4 h-4 fill-black text-black" />
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      key={ep.id || epNum}
-                      onClick={() => handleEpisodeChange(epNum)}
-                      className="w-full p-3.5 sm:p-4 rounded-2xl bg-[#14161f] hover:bg-[#1c1f2b] text-white flex items-center gap-3 sm:gap-3.5 border border-white/[0.04] hover:border-white/10 transition-all cursor-pointer group"
-                    >
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#202330] text-zinc-300 font-bold flex items-center justify-center text-sm flex-none group-hover:bg-[#282c3c] group-hover:text-white transition-colors">
-                        {epNum}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm sm:text-base font-semibold text-zinc-200 group-hover:text-white truncate transition-colors">
-                          {epTitle}
-                        </h4>
-                        <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5 font-normal">
-                          {ep.overview || 'Tonton episode ini sekarang dalam kualitas HD.'}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             ) : (
-              /* Image 6 3-Column Responsive Grid */
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-3.5">
                 {episodesList.map((ep, idx) => {
                   const epNum = ep.episode_number || ep.episode || (idx + 1);
                   const epTitle = ep.name || ep.title || `Episode ${epNum}`;
                   const epThumb = ep.still_path
                     ? TmdbService.getImageUrl(ep.still_path, 'w500')
-                    : (ep.thumbnail || item.poster_path ? TmdbService.getImageUrl(item.poster_path, 'w500') : item.thumbnail);
+                    : (ep.thumbnail || (item.poster_path ? TmdbService.getImageUrl(item.poster_path, 'w500') : item.thumbnail));
                   const isCurrentActive = epNum === currentEpisode;
 
                   return (
@@ -1262,10 +1308,11 @@ export default function WatchPage({
                       onClick={() => handleEpisodeChange(epNum)}
                       className={`group relative flex gap-3 p-3 rounded-xl cursor-pointer transition-all active:scale-[0.99] shadow-lg ${
                         isCurrentActive
-                          ? 'bg-white/10 border-2 border-white shadow-white/10 ring-1 ring-white/40'
-                          : 'bg-[#13141b]/90 hover:bg-[#1a1b24] border border-white/[0.06] hover:border-white/20'
+                          ? 'bg-[#1a1c24] border-2 border-white ring-1 ring-white/30 text-white shadow-white/5'
+                          : 'bg-[#13141b]/90 hover:bg-[#1a1b24] border border-white/[0.06] hover:border-white/20 text-zinc-200'
                       }`}
                     >
+                      {/* Left: Thumbnail with EP X badge in bottom-right */}
                       <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden flex-none bg-zinc-900 border border-white/5">
                         <img
                           src={epThumb}
@@ -1276,7 +1323,9 @@ export default function WatchPage({
                             e.target.src = item.thumbnail || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=80';
                           }}
                         />
-                        <div className={`absolute inset-0 transition-colors flex items-center justify-center ${isCurrentActive ? 'bg-black/30' : 'bg-black/20 group-hover:bg-black/0'}`}>
+                        <div className={`absolute inset-0 transition-colors flex items-center justify-center ${
+                          isCurrentActive ? 'bg-black/30' : 'bg-black/20 group-hover:bg-black/0'
+                        }`}>
                           <div className={`w-7 h-7 rounded-full flex items-center justify-center shadow-md transition-all ${
                             isCurrentActive
                               ? 'bg-white text-black opacity-100 scale-105'
@@ -1290,6 +1339,7 @@ export default function WatchPage({
                         </span>
                       </div>
 
+                      {/* Right: Title & 2-Line Synopsis */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <h4 className={`text-xs sm:text-sm font-bold line-clamp-1 transition-colors ${
                           isCurrentActive ? 'text-white font-extrabold' : 'text-zinc-100 group-hover:text-white'
