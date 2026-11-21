@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Star, Plus, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Star, Plus, Check, Film } from 'lucide-react';
 import { TmdbService } from '../services/tmdbService';
 import { StorageService } from '../services/storageService';
 
@@ -13,13 +13,20 @@ export default function MovieCard({
 }) {
   if (!item) return null;
 
+  const [imageError, setImageError] = useState(false);
+
   const title = item.title || item.name || 'Untitled';
-  const rawPoster = item.poster_path || item.poster || item.thumbnail || item.cover || item.image;
+  const rawPoster = item.poster_path || item.poster || item.tmdbPoster || item.thumbnail || item.cover || item.image;
   
-  let posterUrl = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
+  let posterUrl = '';
   if (rawPoster) {
     if (rawPoster.startsWith('http')) {
-      posterUrl = rawPoster.replace('stream.dubbindo.site', 'ik.imagekit.io/uvideo');
+      if (rawPoster.includes('stream.dubbindo.site') || rawPoster.includes('ik.imagekit.io')) {
+        // Obsolete proxy/scratch domains that 429 or 404
+        posterUrl = '';
+      } else {
+        posterUrl = rawPoster;
+      }
     } else if (rawPoster.startsWith('/images/') || rawPoster.startsWith('./images/')) {
       posterUrl = rawPoster;
     } else {
@@ -56,17 +63,50 @@ export default function MovieCard({
       className={`group relative cursor-pointer transition-all duration-300 ${className}`}
     >
       {/* Poster Container with Smooth Shadow & Border */}
-      <div className="relative aspect-[2/3] w-full rounded-2xl overflow-hidden bg-zinc-900 border border-white/[0.08] group-hover:border-white/20 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-2xl group-hover:shadow-black/80">
-        <img
-          src={posterUrl}
-          alt={title}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
-          }}
-        />
+      <div className="relative aspect-[2/3] w-full rounded-2xl overflow-hidden bg-[#12141c] border border-white/[0.08] group-hover:border-white/20 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-2xl group-hover:shadow-black/80">
+        {imageError || !posterUrl ? (
+          <div className="h-full w-full flex flex-col justify-between p-3.5 bg-gradient-to-br from-[#1c202e] via-[#10121a] to-[#08090d] relative overflow-hidden select-none">
+            {/* Background subtle watermark icon */}
+            <div className="absolute -right-6 -bottom-6 opacity-10 pointer-events-none">
+              <Film className="w-36 h-36 text-white" />
+            </div>
+
+            <div className="flex items-center justify-between z-10">
+              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-white/10 text-white border border-white/15 backdrop-blur-md">
+                {isSeries ? 'Series' : 'Movie'}
+              </span>
+              {rating && (
+                <div className="flex items-center gap-1 text-amber-400 text-xs font-bold">
+                  <Star className="w-3 h-3 fill-amber-400" />
+                  <span>{rating}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="my-auto text-center py-2 z-10">
+              <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/80 group-hover:scale-110 transition-transform">
+                <Film className="w-5 h-5 text-white" />
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-white line-clamp-3 leading-snug px-1">
+                {title}
+              </p>
+              {year && <span className="text-[10px] text-zinc-400 mt-1 inline-block">{year}</span>}
+            </div>
+
+            <div className="z-10 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-400">
+              <span className="truncate max-w-[80px]">{item.badge || (item.isDubIndo ? 'Dub Indo' : 'CinemaOS')}</span>
+              <span className="text-emerald-400 font-bold">Full HD</span>
+            </div>
+          </div>
+        ) : (
+          <img
+            src={posterUrl}
+            alt={title}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={() => setImageError(true)}
+          />
+        )}
 
         {/* Ambient Dark Gradient on Poster */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 opacity-40 group-hover:opacity-75 transition-opacity duration-300" />

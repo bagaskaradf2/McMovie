@@ -348,6 +348,14 @@ export const DubIndoService = {
       });
     });
 
+    // Prioritize movies with genuine TMDB posters first so the catalog is never blank
+    curated.sort((a, b) => {
+      const aHasPoster = a.poster_path && a.poster_path.includes('tmdb.org') ? 1 : 0;
+      const bHasPoster = b.poster_path && b.poster_path.includes('tmdb.org') ? 1 : 0;
+      if (aHasPoster !== bHasPoster) return bHasPoster - aHasPoster;
+      return (b.views || 0) - (a.views || 0);
+    });
+
     curatedMoviesCache = curated;
     isCuratedMoviesReady = true;
     return curatedMoviesCache.slice(0, limit);
