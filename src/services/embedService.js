@@ -43,18 +43,6 @@ export const STREAM_SERVERS = [
     }
   },
   {
-    id: 'two_embed',
-    name: '💎 2Embed VIP',
-    tag: 'Mirror Cadangan Global • Tanpa Batasan Durasi 15 Menit',
-    badge: '1080p',
-    getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
-      if (mediaType === 'tv') {
-        return `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${episode}`;
-      }
-      return `https://www.2embed.cc/embed/${id}`;
-    }
-  },
-  {
     id: 'smashystream',
     name: '🏎️ SmashyStream HD',
     tag: 'Alternatif Cepat Buffer Rendah',

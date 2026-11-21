@@ -45,20 +45,48 @@ export default function WatchPage({
   id: propId,
   season: propSeason = 1,
   episode: propEpisode = 1,
+  preloadedItem
 }) {
   const navigate = useNavigate();
 
-  const [item, setItem] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const hasDirect = Boolean(
+    preloadedItem?.streamUrl ||
+    (preloadedItem?.parts && preloadedItem.parts.length > 0) ||
+    preloadedItem?.isDubIndo
+  );
+
+  const initialSeasonData = preloadedItem ? (() => {
+    const totalEps = (typeof preloadedItem.episodes === 'number' && preloadedItem.episodes > 0)
+      ? preloadedItem.episodes
+      : (preloadedItem.parts?.length || 1);
+    const genEps = Array.from({ length: totalEps }, (_, i) => {
+      const epNum = i + 1;
+      return {
+        episode_number: epNum,
+        name: `Episode ${epNum}`,
+        overview: epNum === 1 && preloadedItem.parts?.length > 0
+          ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
+          : `Episode ${epNum} dari serial ${preloadedItem.title || 'Serial'} durasi penuh.`,
+        still_path: preloadedItem.backdrop_path || preloadedItem.poster_path
+      };
+    });
+    return { episodes: genEps, season_number: 1 };
+  })() : null;
+
+  const [item, setItem] = useState(preloadedItem || null);
+  const [loading, setLoading] = useState(!preloadedItem);
   const [currentSeason, setCurrentSeason] = useState(parseInt(propSeason, 10) || 1);
   const [currentEpisode, setCurrentEpisode] = useState(parseInt(propEpisode, 10) || 1);
-  const [seasonData, setSeasonData] = useState(null);
+  const [selectedPart, setSelectedPart] = useState(1);
+  const [seasonData, setSeasonData] = useState(initialSeasonData);
   const [loadingSeason, setLoadingSeason] = useState(false);
 
-  // Streaming Server state
-  const [activeServer, setActiveServer] = useState('superembed');
+  // Streaming Server state: default to moviebox_direct if direct stream exists
+  const [activeServer, setActiveServer] = useState(
+    hasDirect ? (preloadedItem?.isDubIndo ? 'dub_direct' : 'moviebox_direct') : 'superembed'
+  );
   const [reloadKey, setReloadKey] = useState(0);
-  const [useDirectPlayer, setUseDirectPlayer] = useState(false);
+  const [useDirectPlayer, setUseDirectPlayer] = useState(hasDirect);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -182,7 +210,9 @@ export default function WatchPage({
   // Load details
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
+    if (!preloadedItem) {
+      setLoading(true);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     const settings = StorageService.getSettings();
@@ -204,23 +234,22 @@ export default function WatchPage({
             setActiveServer('moviebox_direct');
           }
 
-          if (finalItem.parts && finalItem.parts.length > 0) {
-            const partsEpisodes = finalItem.parts.map(p => ({
-              episode_number: p.part,
-              name: p.name || `Episode 1 Part ${p.part}`,
-              overview: `Bagian ${p.part} durasi penuh tanpa iklan.`,
+          const totalEps = (typeof finalItem.episodes === 'number' && finalItem.episodes > 0)
+            ? finalItem.episodes
+            : (finalItem.parts?.length || 1);
+
+          const genEps = Array.from({ length: totalEps }, (_, i) => {
+            const epNum = i + 1;
+            return {
+              episode_number: epNum,
+              name: `Episode ${epNum}`,
+              overview: epNum === 1 && finalItem.parts?.length > 0
+                ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
+                : `Episode ${epNum} dari serial ${finalItem.title || 'Serial'} durasi penuh.`,
               still_path: finalItem.backdrop_path || finalItem.poster_path
-            }));
-            setSeasonData({ episodes: partsEpisodes, season_number: 1 });
-          } else if (finalItem.episodes && typeof finalItem.episodes === 'number') {
-            const genEps = Array.from({ length: finalItem.episodes }, (_, i) => ({
-              episode_number: i + 1,
-              name: `Episode ${i + 1}`,
-              overview: `Episode ${i + 1} dari ${finalItem.title || 'Serial'}`,
-              still_path: finalItem.backdrop_path || finalItem.poster_path
-            }));
-            setSeasonData({ episodes: genEps, season_number: 1 });
-          }
+            };
+          });
+          setSeasonData({ episodes: genEps, season_number: 1 });
 
           setLoading(false);
 
@@ -411,11 +440,12 @@ export default function WatchPage({
 
   const handleEpisodeChange = (epNum) => {
     setCurrentEpisode(epNum);
+    setSelectedPart(1);
     setReloadKey(p => p + 1);
     if (item) {
       StorageService.updateProgress(item, { season: currentSeason, episode: epNum, serverId: activeServer });
     }
-    navigate(`/watch/tv/${propId}/${currentSeason}/${epNum}`, { replace: true });
+    navigate(`/watch/tv/${propId}/${currentSeason}/${epNum}`, { replace: true, state: { item } });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -518,7 +548,7 @@ export default function WatchPage({
           name: '🇮🇩 Audio Dubbing Indonesia',
           badge: 'Tersedia!'
         }] : []),
-        ...STREAM_SERVERS
+        ...(item?.tmdbId ? STREAM_SERVERS : [])
       ];
 
   // Smart Server Cycler (Switches across working mirrors)
@@ -740,7 +770,17 @@ export default function WatchPage({
   const genres = item.genres || [];
   const cast = item.credits?.cast?.slice(0, 8) || [];
   const similar = item.similar?.results?.slice(0, 12) || [];
-  const episodesList = seasonData?.episodes || item.episodes || [];
+  const rawEpisodes = seasonData?.episodes || (Array.isArray(item.episodes) ? item.episodes : []);
+  const episodesList = Array.isArray(rawEpisodes) && rawEpisodes.length > 0
+    ? rawEpisodes
+    : (typeof item.episodes === 'number' && item.episodes > 0
+        ? Array.from({ length: item.episodes }, (_, i) => ({
+            episode_number: i + 1,
+            name: `Episode ${i + 1}`,
+            overview: `Episode ${i + 1} dari ${item.title || 'Serial'} durasi penuh.`,
+            still_path: item.backdrop_path || item.poster_path
+          }))
+        : []);
   const currentEpInfo = episodesList.find(e => (e.episode_number || e.episode) === currentEpisode);
   const currentEpTitle = currentEpInfo?.name || `Episode ${currentEpisode}`;
 
@@ -758,9 +798,11 @@ export default function WatchPage({
   // Determine current active direct stream URL
   let currentDirectStream = item?.streamUrl || '';
   if (item?.parts && item.parts.length > 0) {
-    const matchedPart = item.parts.find(p => p.part === currentEpisode) || item.parts[currentEpisode - 1] || item.parts[0];
-    if (matchedPart && matchedPart.url) {
-      currentDirectStream = matchedPart.url;
+    if (currentEpisode === 1) {
+      const matchedPart = item.parts.find(p => p.part === selectedPart) || item.parts[0];
+      currentDirectStream = matchedPart?.url || item.streamUrl;
+    } else {
+      currentDirectStream = item.streamUrl;
     }
   }
 
@@ -774,8 +816,12 @@ export default function WatchPage({
     currentDirectStream = item?.dubStreamUrl;
   } else if (activeServer === 'moviebox_direct') {
     if (item?.parts && item.parts.length > 0) {
-      const matchedPart = item.parts.find(p => p.part === currentEpisode) || item.parts[currentEpisode - 1] || item.parts[0];
-      currentDirectStream = matchedPart?.url || item?.streamUrl;
+      if (currentEpisode === 1) {
+        const matchedPart = item.parts.find(p => p.part === selectedPart) || item.parts[0];
+        currentDirectStream = matchedPart?.url || item?.streamUrl;
+      } else {
+        currentDirectStream = item?.streamUrl;
+      }
     } else {
       currentDirectStream = item?.streamUrl;
     }
@@ -1345,6 +1391,44 @@ export default function WatchPage({
             </button>
           </div>
         </div>
+
+        {/* Episode Part Selector Bar (e.g. Episode 1 Part 1, Part 2, Part 3) */}
+        {currentEpisode === 1 && item?.parts && item.parts.length > 1 && (
+          <div className="mt-3 px-4 py-2.5 rounded-2xl bg-[#0e1017] border border-amber-400/20 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-lg animate-fadeIn">
+            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 flex-none">
+              <Layers className="w-3.5 h-3.5" />
+              <span>Bagian Episode 1:</span>
+            </span>
+            <div className="flex items-center gap-2">
+              {item.parts.map((p) => {
+                const isSelected = selectedPart === p.part;
+                return (
+                  <button
+                    key={p.part}
+                    onClick={() => {
+                      setSelectedPart(p.part);
+                      if (videoRef.current && p.url) {
+                        videoRef.current.src = p.url;
+                        videoRef.current.play().catch(() => {});
+                      }
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-amber-400 text-black font-extrabold shadow-md scale-[1.02]'
+                        : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+                    }`}
+                  >
+                    <Play className={`w-3 h-3 ${isSelected ? 'fill-black' : 'fill-zinc-400'}`} />
+                    <span>{p.name || `Part ${p.part}`}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="ml-auto text-[11px] text-zinc-400 hidden md:inline">
+              ⚡ Durasi Penuh • Kualitas HD • Tanpa Iklan
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 

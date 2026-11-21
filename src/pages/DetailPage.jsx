@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Play,
   Star,
@@ -27,13 +27,15 @@ import MovieCard from '../components/MovieCard';
 export default function DetailPage({ type: propType }) {
   const { id: paramId, type: paramType } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const preloadedItem = location.state?.item;
 
   const type = propType || paramType || 'movie';
   const id = paramId;
 
-  const [item, setItem] = useState(null);
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [item, setItem] = useState(preloadedItem || null);
+  const [details, setDetails] = useState(preloadedItem || null);
+  const [loading, setLoading] = useState(!preloadedItem);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonData, setSeasonData] = useState(null);
   const [loadingSeason, setLoadingSeason] = useState(false);
@@ -43,7 +45,9 @@ export default function DetailPage({ type: propType }) {
 
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
+    if (!preloadedItem) {
+      setLoading(true);
+    }
     setShowTrailer(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -57,25 +61,23 @@ export default function DetailPage({ type: propType }) {
           setDetails(fullItem);
           setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
 
-          if (fullItem.parts && fullItem.parts.length > 0) {
-            const partsEpisodes = fullItem.parts.map(p => ({
-              episode_number: p.part,
-              name: p.name || `Episode 1 Part ${p.part}`,
-              overview: `Bagian ${p.part} durasi penuh tanpa iklan.`,
+          const totalEps = (typeof fullItem.episodes === 'number' && fullItem.episodes > 0)
+            ? fullItem.episodes
+            : (fullItem.parts?.length || 1);
+
+          const genEps = Array.from({ length: totalEps }, (_, i) => {
+            const epNum = i + 1;
+            return {
+              episode_number: epNum,
+              name: `Episode ${epNum}`,
+              overview: epNum === 1 && fullItem.parts?.length > 0
+                ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
+                : `Episode ${epNum} dari serial ${fullItem.title || 'Serial'} durasi penuh.`,
               still_path: fullItem.backdrop_path || fullItem.poster_path
-            }));
-            setSeasonData({ episodes: partsEpisodes, season_number: 1 });
-            setSelectedSeason(1);
-          } else if (fullItem.episodes && typeof fullItem.episodes === 'number') {
-            const genEps = Array.from({ length: fullItem.episodes }, (_, i) => ({
-              episode_number: i + 1,
-              name: `Episode ${i + 1}`,
-              overview: `Episode ${i + 1} dari ${fullItem.title || 'Serial'}`,
-              still_path: fullItem.backdrop_path || fullItem.poster_path
-            }));
-            setSeasonData({ episodes: genEps, season_number: 1 });
-            setSelectedSeason(1);
-          }
+            };
+          });
+          setSeasonData({ episodes: genEps, season_number: 1 });
+          setSelectedSeason(1);
 
           setLoading(false);
 
@@ -289,10 +291,21 @@ export default function DetailPage({ type: propType }) {
     (v) => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser')
   );
 
-  // Episodes List for Series
-  const episodesList = item.isDubIndo
+  // Episodes List for Series: handle both Array and Number formats safely
+  const rawEpisodes = item.isDubIndo
     ? (item.episodes || [])
-    : (seasonData?.episodes || data.episodes || []);
+    : (seasonData?.episodes || (Array.isArray(data.episodes) ? data.episodes : []));
+
+  const episodesList = Array.isArray(rawEpisodes) && rawEpisodes.length > 0
+    ? rawEpisodes
+    : (typeof data.episodes === 'number' && data.episodes > 0
+        ? Array.from({ length: data.episodes }, (_, i) => ({
+            episode_number: i + 1,
+            name: `Episode ${i + 1}`,
+            overview: `Episode ${i + 1} dari ${data.title || 'Serial'} durasi penuh.`,
+            still_path: data.backdrop_path || data.poster_path
+          }))
+        : []);
 
   const validSeasons = Array.isArray(data?.seasons) && data.seasons.length > 0
     ? data.seasons.filter(s => s.season_number > 0)
@@ -544,6 +557,30 @@ export default function DetailPage({ type: propType }) {
                 </div>
               )}
             </div>
+
+            {/* Episode 1 Parts Bar if available */}
+            {data.parts && data.parts.length > 1 && (
+              <div className="mb-4 px-4 py-2.5 rounded-xl bg-[#12141c] border border-amber-400/20 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-sm">
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 flex-none">
+                  <Play className="w-3 h-3 fill-amber-400" />
+                  <span>Episode 1 Tersedia Lengkap:</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  {data.parts.map((p) => (
+                    <button
+                      key={p.part}
+                      onClick={() => handlePlayDirect(selectedSeason, 1)}
+                      className="px-3 py-1 rounded-lg text-xs font-bold bg-zinc-900 hover:bg-amber-400 hover:text-black text-zinc-300 border border-white/10 transition-colors"
+                    >
+                      {p.name || `Part ${p.part}`}
+                    </button>
+                  ))}
+                </div>
+                <span className="ml-auto text-[11px] text-zinc-400 hidden sm:inline">
+                  ⚡ 33 Episode Full HD
+                </span>
+              </div>
+            )}
 
             {/* Episodes 3-Column Responsive Grid */}
             {loadingSeason ? (

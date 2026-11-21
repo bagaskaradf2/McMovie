@@ -216,13 +216,13 @@ export default function App() {
     if (!item) return;
     const playId = item.tmdbId || item.id;
     if (item.isDubIndo) {
-      navigate(`/watch/dub/${item.id}`);
+      navigate(`/watch/dub/${item.id}`, { state: { item } });
     } else if (item.media_type === 'tv' || item.type === 'series' || item.category === 'Film Series' || (item.episodes && item.episodes.length > 0)) {
       const s = item.selectedSeason || item.season || 1;
       const e = item.selectedEpisode || item.episode || 1;
-      navigate(`/watch/tv/${playId}/${s}/${e}`);
+      navigate(`/watch/tv/${playId}/${s}/${e}`, { state: { item } });
     } else {
-      navigate(`/watch/movie/${playId}`);
+      navigate(`/watch/movie/${playId}`, { state: { item } });
     }
   };
 
@@ -231,11 +231,11 @@ export default function App() {
     if (!item) return;
     const detailId = item.tmdbId || item.id;
     if (item.isDubIndo || String(item.id).startsWith('dub_')) {
-      navigate(`/dub/${item.id}`);
+      navigate(`/dub/${item.id}`, { state: { item } });
     } else if (item.media_type === 'tv' || item.type === 'series' || item.category === 'Film Series' || item.first_air_date || (item.episodes && item.episodes.length > 0)) {
-      navigate(`/tv/${detailId}`);
+      navigate(`/tv/${detailId}`, { state: { item } });
     } else {
-      navigate(`/movie/${detailId}`);
+      navigate(`/movie/${detailId}`, { state: { item } });
     }
   };
 

@@ -16,7 +16,7 @@
       "badge": "Disney+",
       "synopsis": "Permaisuri Navier yang tersayang memimpin Kekaisaran Timur bersama Kaisar Sovieshu. Namun, ketika Sovieshu jatuh cinta kepada budak yang kabur dan meminta cerai, Navier akan setuju dengan satu syarat: dia disetujui untuk menikahi Pangeran Heinrey dari Kerajaan Barat.",
       "seasons": 1,
-      "episodes": 10,
+      "episodes": 8,
       "subjectId": "579116273137862480",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/7cf3fcb1e406e8cbdc4cada3d1792a96-ld.mp4",
       "parts": [
@@ -39,7 +39,7 @@
     },
     {
       "id": 300523,
-      "tmdbId": 300523,
+      "tmdbId": null,
       "title": "The Blue Road",
       "original_title": "푸른길",
       "poster": "https://image.tmdb.org/t/p/w500/9mmOjx2bWuLd9NnVpC71OUEXBym.jpg",
@@ -51,9 +51,28 @@
       "type": "series",
       "media_type": "tv",
       "badge": "Netflix",
-      "synopsis": "Saksikan tayangan The Blue Road kualitas Full HD 1080p tanpa iklan.",
+      "synopsis": "Saksikan tayangan serial drama kriminal The Blue Road kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 8
+      "episodes": 8,
+      "subjectId": "1397218597474291624",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/17/ac63b3a9e1c5c478ebf8a67d4766154c-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/17/ac63b3a9e1c5c478ebf8a67d4766154c-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/17/ac63b3a9e1c5c478ebf8a67d4766154c-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/17/ac63b3a9e1c5c478ebf8a67d4766154c-ld.mp4"
+        }
+      ]
     },
     {
       "id": 341993,
@@ -71,7 +90,7 @@
       "badge": "WeTV",
       "synopsis": "Saksikan tayangan Sleeping with the Enemy kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1,
+      "episodes": 3,
       "subjectId": "5130213474609651224",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/9b83a8b4393d5db16191d199800a4b93-ld.mp4",
       "parts": [
@@ -108,7 +127,7 @@
       "badge": "ANTV / Netflix",
       "synopsis": "Saksikan tayangan Alas Roban: The Series kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 4,
+      "episodes": 38,
       "subjectId": "6134818076174474520",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/4336f7dd761d35ec808d8b59a5a834b5-ld.mp4",
       "parts": [
@@ -149,7 +168,7 @@
     },
     {
       "id": 318795,
-      "tmdbId": 318795,
+      "tmdbId": null,
       "title": "Terikat Janji (Bound by Promise)",
       "original_title": "Terikat Janji",
       "poster": "https://image.tmdb.org/t/p/w500/jFoefJFxLPSktCepRwhfmtkoWUg.jpg",
@@ -163,25 +182,65 @@
       "badge": "MNC Pictures",
       "synopsis": "Davina, putri konglomerat yang hidupnya hancur akibat pengkhianatan. Demi menjaga harga dirinya, ia nekat menjadikan Sena—seorang pedagang ketoprak—sebagai pacar pura-pura. Namun tanpa disangka, Sena adalah pria dengan masa lalu kelam yang menyimpan rahasia dan misi untuk menghancurkan keluarga Davina dari dalam",
       "seasons": 1,
-      "episodes": 4
+      "episodes": 223,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
+      ]
     },
     {
-      "id": 293607,
+      "id": "5844444070034161864",
+      "subjectId": "5844444070034161864",
       "tmdbId": 293607,
       "title": "100 Days of Deception",
-      "original_title": "100일의 거짓말",
-      "poster": "https://image.tmdb.org/t/p/w500/wf7l8ZfGGkOKcQGF3Htt5DDhBxD.jpg",
-      "poster_path": "/wf7l8ZfGGkOKcQGF3Htt5DDhBxD.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/original/3SvKCITqMtjgPIhFBjRc4yTAc4H.jpg",
-      "backdrop_path": "/3SvKCITqMtjgPIhFBjRc4yTAc4H.jpg",
-      "rating": 8.8,
+      "original_title": "100 Days of Deception",
+      "poster": "https://pbcdnw.aoneroom.com/image/2026/11/12/6312f9bd5b6b8c3d48f23ad1b74c940c.jpg",
+      "poster_path": "https://pbcdnw.aoneroom.com/image/2026/11/12/6312f9bd5b6b8c3d48f23ad1b74c940c.jpg",
+      "backdrop": "https://pbcdnw.aoneroom.com/image/2026/11/12/6312f9bd5b6b8c3d48f23ad1b74c940c.jpg",
+      "backdrop_path": "https://pbcdnw.aoneroom.com/image/2026/11/12/6312f9bd5b6b8c3d48f23ad1b74c940c.jpg",
+      "rating": 8.5,
+      "vote_average": 8.5,
       "year": "2026",
+      "release_date": "2026-10-10",
       "type": "series",
       "media_type": "tv",
-      "badge": "Netflix",
-      "synopsis": "Saksikan tayangan 100 Days of Deception kualitas Full HD 1080p tanpa iklan.",
+      "badge": "Trending Drama",
+      "category": "K-Drama",
+      "synopsis": "Serial drama misteri dan konspirasi 100 Days of Deception (12 Episode) menceritakan intrik penyamaran, uang tebusan, dan perebutan kekuasaan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/1d4e712dea33e75328524f13af98b118-ld.mp4",
+      "episodes": 12,
       "seasons": 1,
-      "episodes": 16
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/1d4e712dea33e75328524f13af98b118-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/41374fe6cc921bc52dfd95b7116cdac5-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/d4796d9058513f2657ad8b2546d90ce1-ld.mp4"
+        }
+      ]
     },
     {
       "id": "5044430333324805352",
@@ -193,17 +252,17 @@
       "poster_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
       "backdrop": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
       "backdrop_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
-      "rating": 8.6,
-      "vote_average": 8.6,
+      "rating": 8.8,
+      "vote_average": 8.8,
       "year": "2026",
       "release_date": "2026-10-19",
       "type": "series",
       "media_type": "tv",
       "badge": "Trending Drama",
       "category": "Sinetron Indonesia",
-      "synopsis": "Sinetron drama romantis Indonesia Terbaik Itu Kamu tayang setiap hari menceritakan liku-liku cinta, pengorbanan, dan kesetiaan. Saksikan full episode kualitas Full HD durasi penuh tanpa iklan.",
+      "synopsis": "Sinetron drama romantis Indonesia Terbaik Itu Kamu (33 Episode) mengisahkan liku-liku cinta, pengorbanan, dan kesetiaan sejati. Saksikan seluruh 33 episode kualitas Full HD durasi penuh tanpa iklan.",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
-      "episodes": 3,
+      "episodes": 33,
       "seasons": 1,
       "parts": [
         {
@@ -316,7 +375,7 @@
     },
     {
       "id": 338733,
-      "tmdbId": 338733,
+      "tmdbId": null,
       "title": "Main Belakang",
       "original_title": "Main Belakang",
       "poster": "https://image.tmdb.org/t/p/w500/tqkEaAt88HqlKC91dSlYfr0M6Nq.jpg",
@@ -330,7 +389,7 @@
       "badge": "MAXstream",
       "synopsis": "Saksikan tayangan Main Belakang kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1,
+      "episodes": 6,
       "subjectId": "1320027967761926032",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/c1aef5f2b9402af97f8dd04107e5fbbc-ld.mp4",
       "parts": [
@@ -353,7 +412,7 @@
     },
     {
       "id": 340310,
-      "tmdbId": 340310,
+      "tmdbId": null,
       "title": "12 IPA 4",
       "original_title": "12 IPA 4",
       "poster": "https://image.tmdb.org/t/p/w500/8Ls69GTy4TMMoHV85XFaFJDzJHV.jpg",
@@ -367,7 +426,25 @@
       "badge": "Vision+",
       "synopsis": "Saksikan tayangan 12 IPA 4 kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 17
+      "episodes": 24,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
+      ]
     },
     {
       "id": 222614,
@@ -784,20 +861,20 @@
       "episodes": 1
     },
     {
-      "id": 1134418,
-      "tmdbId": 1134418,
+      "id": 1092622,
+      "tmdbId": 1092622,
       "title": "Ali Topan",
       "original_title": "Ali Topan",
-      "poster": "",
-      "poster_path": "",
-      "backdrop": "",
-      "backdrop_path": "",
-      "rating": 8.2,
+      "poster": "https://image.tmdb.org/t/p/w500/1aq5NDNtKejONce1QwaDdTYntby.jpg",
+      "poster_path": "/1aq5NDNtKejONce1QwaDdTYntby.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/3hKlH4Z8eNJDQ01PYLCEySsJLlR.jpg",
+      "backdrop_path": "/3hKlH4Z8eNJDQ01PYLCEySsJLlR.jpg",
+      "rating": 7.8,
       "year": "2024",
       "type": "movie",
       "media_type": "movie",
       "badge": "Action Romance",
-      "synopsis": "Saksikan tayangan Ali Topan kualitas Full HD 1080p tanpa iklan."
+      "synopsis": "Ali Topan, pemuda berjiwa bebas yang hidup di jalanan, menemukan arti cinta dan pengorbanan saat membela kebenaran."
     },
     {
       "id": 994108,
@@ -925,17 +1002,17 @@
       "poster_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
       "backdrop": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
       "backdrop_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
-      "rating": 8.6,
-      "vote_average": 8.6,
+      "rating": 8.8,
+      "vote_average": 8.8,
       "year": "2026",
       "release_date": "2026-10-19",
       "type": "series",
       "media_type": "tv",
       "badge": "Trending Drama",
       "category": "Sinetron Indonesia",
-      "synopsis": "Sinetron drama romantis Indonesia Terbaik Itu Kamu tayang setiap hari menceritakan liku-liku cinta, pengorbanan, dan kesetiaan. Saksikan full episode kualitas Full HD durasi penuh tanpa iklan.",
+      "synopsis": "Sinetron drama romantis Indonesia Terbaik Itu Kamu (33 Episode) mengisahkan liku-liku cinta, pengorbanan, dan kesetiaan sejati. Saksikan seluruh 33 episode kualitas Full HD durasi penuh tanpa iklan.",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
-      "episodes": 3,
+      "episodes": 33,
       "seasons": 1,
       "parts": [
         {
@@ -971,7 +1048,7 @@
       "badge": "ANTV / Netflix",
       "synopsis": "Saksikan tayangan Alas Roban: The Series kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 4,
+      "episodes": 38,
       "subjectId": "6134818076174474520",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/4336f7dd761d35ec808d8b59a5a834b5-ld.mp4",
       "parts": [
@@ -1049,7 +1126,7 @@
     },
     {
       "id": 318795,
-      "tmdbId": 318795,
+      "tmdbId": null,
       "title": "Terikat Janji (Bound by Promise)",
       "original_title": "Terikat Janji",
       "poster": "https://image.tmdb.org/t/p/w500/jFoefJFxLPSktCepRwhfmtkoWUg.jpg",
@@ -1063,11 +1140,29 @@
       "badge": "MNC Pictures",
       "synopsis": "Davina, putri konglomerat yang hidupnya hancur akibat pengkhianatan. Demi menjaga harga dirinya, ia nekat menjadikan Sena—seorang pedagang ketoprak—sebagai pacar pura-pura. Namun tanpa disangka, Sena adalah pria dengan masa lalu kelam yang menyimpan rahasia dan misi untuk menghancurkan keluarga Davina dari dalam",
       "seasons": 1,
-      "episodes": 4
+      "episodes": 223,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
+      ]
     },
     {
       "id": 338733,
-      "tmdbId": 338733,
+      "tmdbId": null,
       "title": "Main Belakang",
       "original_title": "Main Belakang",
       "poster": "https://image.tmdb.org/t/p/w500/tqkEaAt88HqlKC91dSlYfr0M6Nq.jpg",
@@ -1081,7 +1176,7 @@
       "badge": "MAXstream",
       "synopsis": "Saksikan tayangan Main Belakang kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1,
+      "episodes": 6,
       "subjectId": "1320027967761926032",
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/c1aef5f2b9402af97f8dd04107e5fbbc-ld.mp4",
       "parts": [
@@ -1158,7 +1253,7 @@
     },
     {
       "id": 340310,
-      "tmdbId": 340310,
+      "tmdbId": null,
       "title": "12 IPA 4",
       "original_title": "12 IPA 4",
       "poster": "https://image.tmdb.org/t/p/w500/8Ls69GTy4TMMoHV85XFaFJDzJHV.jpg",
@@ -1172,11 +1267,29 @@
       "badge": "Vision+ Series",
       "synopsis": "Saksikan tayangan 12 IPA 4 kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 17
+      "episodes": 24,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
+      ]
     },
     {
       "id": 338053,
-      "tmdbId": 338053,
+      "tmdbId": null,
       "title": "Asmara Gen Z New Era",
       "original_title": "Asmara Gen Z New Era",
       "poster": "https://image.tmdb.org/t/p/w500/tXvySvlo5UP2iYbtbg3i8okNQMJ.jpg",
@@ -1190,11 +1303,17 @@
       "badge": "Vidio Series",
       "synopsis": "Saksikan tayangan Asmara Gen Z New Era kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1
+      "episodes": 30,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
+        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
+        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+      ]
     },
     {
       "id": 130088,
-      "tmdbId": 130088,
+      "tmdbId": null,
       "title": "Suara Hati",
       "original_title": "Suara Hati",
       "poster": "https://image.tmdb.org/t/p/w500/gtgio0oPggN1AMaD2rd5ce2IRZi.jpg",
@@ -1208,11 +1327,17 @@
       "badge": "Indosiar",
       "synopsis": "Saksikan tayangan Suara Hati kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 13
+      "episodes": 50,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
+        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
+        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+      ]
     },
     {
       "id": 335719,
-      "tmdbId": 335719,
+      "tmdbId": null,
       "title": "POTE",
       "original_title": "Pote",
       "poster": "https://image.tmdb.org/t/p/w500/960mXljpnEn8OBgW2M5YWEjhUG9.jpg",
@@ -1226,11 +1351,17 @@
       "badge": "Vision+ Series",
       "synopsis": "Saksikan tayangan POTE kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 8
+      "episodes": 16,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
+        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
+        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+      ]
     },
     {
       "id": 337412,
-      "tmdbId": 337412,
+      "tmdbId": null,
       "title": "Istri Satu-Satunya",
       "original_title": "Istri Satu-Satunya",
       "poster": "https://image.tmdb.org/t/p/w500/4Thm72yetd2xyzJs1kn0iNQ1nyV.jpg",
@@ -1244,7 +1375,13 @@
       "badge": "Vision+ Drama",
       "synopsis": "Saksikan tayangan Istri Satu-Satunya kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1
+      "episodes": 20,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "parts": [
+        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
+        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
+        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+      ]
     },
     {
       "id": 94329,
