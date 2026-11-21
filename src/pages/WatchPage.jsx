@@ -36,6 +36,7 @@ import {
 import { STREAM_SERVERS, getEmbedUrl } from '../services/embedService';
 import { TmdbService } from '../services/tmdbService';
 import { DubIndoService } from '../services/dubIndoService';
+import { MovieBoxService } from '../services/movieBoxService';
 import { StorageService } from '../services/storageService';
 import MovieCard from '../components/MovieCard';
 
@@ -189,122 +190,175 @@ export default function WatchPage({
       setActiveServer(settings.preferredServer);
     }
 
-    if (type === 'dub') {
-      const rawId = String(propId).replace(/^dub_/, '').replace(/^dub_series_/, '');
-      
-      // Comprehensive universal lookup across all catalogs & mirrors
-      DubIndoService.getMovieOrSeriesById(propId).then(async (found) => {
-        if (!isMounted) return;
-        
-        let targetItem = found;
-        if (!targetItem) {
-          // Try looking up by TMDB ID
-          targetItem = await DubIndoService.findDubIndoByTmdbId(rawId);
-        }
+    async function loadItem() {
+      // 1. FAST PATH: Check MovieBox & Local Scraped Catalog FIRST (Instant local cache)
+      try {
+        const localItem = await MovieBoxService.getDetail(propId);
+        if (localItem && isMounted) {
+          const finalItem = { ...localItem, media_type: localItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
+          setItem(finalItem);
+          setIsWatchlisted(StorageService.isWatchlisted(finalItem.id));
 
-        if (targetItem) {
-          if (!targetItem.tmdbId) {
-            const resolvedTmdb = await DubIndoService.resolveDubTmdbId(targetItem.title, targetItem.year);
-            if (resolvedTmdb) {
-              targetItem.tmdbId = resolvedTmdb;
-            }
+          if (finalItem.streamUrl || (finalItem.parts && finalItem.parts.length > 0)) {
+            setUseDirectPlayer(true);
+            setActiveServer('moviebox_direct');
           }
 
-          // If TMDB ID is available, fetch rich cast & crew metadata
-          if (targetItem.tmdbId) {
-            try {
-              const tmdbData = await TmdbService.getDetails(targetItem.tmdbId, targetItem.media_type || 'movie');
-              if (tmdbData && isMounted) {
-                targetItem.credits = tmdbData.credits;
-                targetItem.genres = tmdbData.genres;
-                targetItem.runtime = tmdbData.runtime;
-                targetItem.tagline = tmdbData.tagline;
-                targetItem.similar = tmdbData.similar;
-              }
-            } catch (e) {
-              console.warn('Could not fetch TMDB cast for dub item:', e);
-            }
+          if (finalItem.parts && finalItem.parts.length > 0) {
+            const partsEpisodes = finalItem.parts.map(p => ({
+              episode_number: p.part,
+              name: p.name || `Episode 1 Part ${p.part}`,
+              overview: `Bagian ${p.part} durasi penuh tanpa iklan.`,
+              still_path: finalItem.backdrop_path || finalItem.poster_path
+            }));
+            setSeasonData({ episodes: partsEpisodes, season_number: 1 });
+          } else if (finalItem.episodes && typeof finalItem.episodes === 'number') {
+            const genEps = Array.from({ length: finalItem.episodes }, (_, i) => ({
+              episode_number: i + 1,
+              name: `Episode ${i + 1}`,
+              overview: `Episode ${i + 1} dari ${finalItem.title || 'Serial'}`,
+              still_path: finalItem.backdrop_path || finalItem.poster_path
+            }));
+            setSeasonData({ episodes: genEps, season_number: 1 });
           }
 
-          // Pre-resolve direct signed Wasabi S3 stream to bypass redirect issues
-          if (targetItem.streamUrl && targetItem.streamUrl.includes('files.indodub.my.id')) {
-            try {
-              const direct = await DubIndoService.resolveDirectPlayableUrl(targetItem.streamUrl);
-              if (direct) {
-                targetItem.directWasabiUrl = direct;
-              }
-            } catch (e) {
-              console.warn('Could not pre-resolve direct Wasabi stream:', e);
-            }
-          }
-
-          setItem(targetItem);
-          setUseDirectPlayer(true);
-          setActiveServer('dub_direct');
-          setIsWatchlisted(StorageService.isWatchlisted(targetItem.id));
-          StorageService.updateProgress(targetItem, { season: 1, episode: 1, serverId: 'dub_direct' });
-          setLoading(false);
-        } else {
-          setLoading(false);
-        }
-      });
-    } else {
-      const mediaType = type === 'tv' ? 'tv' : 'movie';
-      TmdbService.getDetails(propId, mediaType)
-        .then(async (data) => {
-          if (!isMounted) return;
-          const fullItem = { ...data, media_type: mediaType };
-
-          // Check if this TMDB title also has a verified Dub Indo audio stream
-          if (mediaType === 'movie') {
-            const dubMatch = await DubIndoService.findDubIndoByTmdbId(propId);
-            if (dubMatch && dubMatch.streamUrl) {
-              fullItem.hasDubIndo = true;
-              fullItem.dubStreamUrl = dubMatch.streamUrl;
-              fullItem.dubStreamBackupUrl = dubMatch.streamBackupUrl;
-              fullItem.dubItem = dubMatch;
-            }
-          }
-
-          setItem(fullItem);
-          setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
-          if (data.runtime) setDuration(data.runtime * 60);
           setLoading(false);
 
-          StorageService.updateProgress(fullItem, {
+          StorageService.updateProgress(finalItem, {
             season: currentSeason,
             episode: currentEpisode,
-            serverId: settings.preferredServer || 'vidlink',
+            serverId: finalItem.streamUrl ? 'moviebox_direct' : (settings.preferredServer || 'superembed'),
           });
 
-          if (mediaType === 'tv') {
-            fetchSeason(propId, currentSeason);
+          // If local item has a TMDB ID, optionally fetch seasons/cast in background
+          if (finalItem.tmdbId && finalItem.media_type === 'tv' && (!finalItem.parts || finalItem.parts.length === 0)) {
+            fetchSeason(finalItem.tmdbId, currentSeason);
           }
-        })
-        .catch(async (err) => {
-          console.error('Failed to load details from TMDB:', err);
-          try {
-            const catalogRes = await fetch('/data/moviebox_catalog.json');
-            const cat = await catalogRes.json();
-            const allItems = [
-              ...(cat.trending_drama || []),
-              ...(cat.trending_movies || []),
-              ...(cat.indo_netflix || []),
-              ...(cat.sinetron_series || [])
-            ];
-            const found = allItems.find(i => String(i.id) === String(propId) || String(i.tmdbId) === String(propId));
-            if (found && isMounted) {
-              setItem(found);
-              setIsWatchlisted(StorageService.isWatchlisted(found.id));
-              setLoading(false);
-              return;
+          return;
+        }
+      } catch (e) {
+        console.warn('Fast path local catalog lookup error:', e);
+      }
+
+      // 2. DUB INDO PATH
+      if (type === 'dub') {
+        const rawId = String(propId).replace(/^dub_/, '').replace(/^dub_series_/, '');
+        
+        // Comprehensive universal lookup across all catalogs & mirrors
+        DubIndoService.getMovieOrSeriesById(propId).then(async (found) => {
+          if (!isMounted) return;
+          
+          let targetItem = found;
+          if (!targetItem) {
+            targetItem = await DubIndoService.findDubIndoByTmdbId(rawId);
+          }
+
+          if (targetItem) {
+            if (!targetItem.tmdbId) {
+              const resolvedTmdb = await DubIndoService.resolveDubTmdbId(targetItem.title, targetItem.year);
+              if (resolvedTmdb) {
+                targetItem.tmdbId = resolvedTmdb;
+              }
             }
-          } catch (e) {
-            console.warn('Fallback catalog search error:', e);
+
+            if (targetItem.tmdbId) {
+              try {
+                const tmdbData = await TmdbService.getDetails(targetItem.tmdbId, targetItem.media_type || 'movie');
+                if (tmdbData && isMounted) {
+                  targetItem.credits = tmdbData.credits;
+                  targetItem.genres = tmdbData.genres;
+                  targetItem.runtime = tmdbData.runtime;
+                  targetItem.tagline = tmdbData.tagline;
+                  targetItem.similar = tmdbData.similar;
+                }
+              } catch (e) {
+                console.warn('Could not fetch TMDB cast for dub item:', e);
+              }
+            }
+
+            if (targetItem.streamUrl && targetItem.streamUrl.includes('files.indodub.my.id')) {
+              try {
+                const direct = await DubIndoService.resolveDirectPlayableUrl(targetItem.streamUrl);
+                if (direct) {
+                  targetItem.directWasabiUrl = direct;
+                }
+              } catch (e) {
+                console.warn('Could not pre-resolve direct Wasabi stream:', e);
+              }
+            }
+
+            setItem(targetItem);
+            setUseDirectPlayer(true);
+            setActiveServer('dub_direct');
+            setIsWatchlisted(StorageService.isWatchlisted(targetItem.id));
+            StorageService.updateProgress(targetItem, { season: 1, episode: 1, serverId: 'dub_direct' });
+            setLoading(false);
+          } else {
+            setLoading(false);
           }
-          if (isMounted) setLoading(false);
         });
+      } else {
+        // 3. TMDB PATH
+        const mediaType = type === 'tv' ? 'tv' : 'movie';
+        try {
+          const data = await TmdbService.getDetails(propId, mediaType);
+          if (!isMounted) return;
+
+          if (data) {
+            const fullItem = { ...data, media_type: mediaType };
+
+            if (mediaType === 'movie') {
+              const dubMatch = await DubIndoService.findDubIndoByTmdbId(propId);
+              if (dubMatch && dubMatch.streamUrl) {
+                fullItem.hasDubIndo = true;
+                fullItem.dubStreamUrl = dubMatch.streamUrl;
+                fullItem.dubStreamBackupUrl = dubMatch.streamBackupUrl;
+                fullItem.dubItem = dubMatch;
+              }
+            }
+
+            setItem(fullItem);
+            setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
+            if (data.runtime) setDuration(data.runtime * 60);
+            setLoading(false);
+
+            StorageService.updateProgress(fullItem, {
+              season: currentSeason,
+              episode: currentEpisode,
+              serverId: settings.preferredServer || 'superembed',
+            });
+
+            if (mediaType === 'tv') {
+              fetchSeason(propId, currentSeason);
+            }
+            return;
+          }
+        } catch (err) {
+          console.error('Failed to load details from TMDB:', err);
+        }
+
+        // 4. Secondary fallback
+        try {
+          const fallback = await MovieBoxService.getDetail(propId);
+          if (fallback && isMounted) {
+            setItem(fallback);
+            setIsWatchlisted(StorageService.isWatchlisted(fallback.id));
+            if (fallback.streamUrl) {
+              setUseDirectPlayer(true);
+              setActiveServer('moviebox_direct');
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('Fallback catalog search error:', e);
+        }
+
+        if (isMounted) setLoading(false);
+      }
     }
+
+    loadItem();
 
     return () => {
       isMounted = false;
@@ -382,7 +436,13 @@ export default function WatchPage({
 
   const handleServerSelect = async (serverId) => {
     setActiveServer(serverId);
-    if (serverId === 'dub_direct') {
+    if (serverId === 'moviebox_direct') {
+      setUseDirectPlayer(true);
+      if (videoRef.current) {
+        videoRef.current.src = currentDirectStream;
+        videoRef.current.play().catch(() => {});
+      }
+    } else if (serverId === 'dub_direct') {
       setUseDirectPlayer(true);
       if (item) {
         if (!item.directWasabiUrl && item.streamUrl) {
@@ -448,6 +508,11 @@ export default function WatchPage({
         }] : [])
       ]
     : [
+        ...((item?.streamUrl || item?.parts) ? [{
+          id: 'moviebox_direct',
+          name: '⚡ MovieBox Direct HD (Tanpa Iklan)',
+          badge: 'Direct MP4'
+        }] : []),
         ...(item?.hasDubIndo ? [{
           id: 'dub_tmdb',
           name: '🇮🇩 Audio Dubbing Indonesia',
@@ -691,13 +756,30 @@ export default function WatchPage({
     : getEmbedUrl(activeServer, resolvedTargetId, isSeries ? 'tv' : 'movie', currentSeason, currentEpisode, item);
 
   // Determine current active direct stream URL
-  const currentDirectStream = activeServer === 'dub_direct'
-    ? (item.directWasabiUrl || item.streamUrl)
-    : (activeServer === 'dub_redirect'
-        ? item.streamUrl
-        : (activeServer === 'dub_cf'
-            ? (item.streamBackupUrl || item.streamUrl)
-            : (activeServer === 'dub_tmdb' ? item.dubStreamUrl : item.streamUrl)));
+  let currentDirectStream = item?.streamUrl || '';
+  if (item?.parts && item.parts.length > 0) {
+    const matchedPart = item.parts.find(p => p.part === currentEpisode) || item.parts[currentEpisode - 1] || item.parts[0];
+    if (matchedPart && matchedPart.url) {
+      currentDirectStream = matchedPart.url;
+    }
+  }
+
+  if (activeServer === 'dub_direct') {
+    currentDirectStream = item?.directWasabiUrl || item?.streamUrl;
+  } else if (activeServer === 'dub_redirect') {
+    currentDirectStream = item?.streamUrl;
+  } else if (activeServer === 'dub_cf') {
+    currentDirectStream = item?.streamBackupUrl || item?.streamUrl;
+  } else if (activeServer === 'dub_tmdb') {
+    currentDirectStream = item?.dubStreamUrl;
+  } else if (activeServer === 'moviebox_direct') {
+    if (item?.parts && item.parts.length > 0) {
+      const matchedPart = item.parts.find(p => p.part === currentEpisode) || item.parts[currentEpisode - 1] || item.parts[0];
+      currentDirectStream = matchedPart?.url || item?.streamUrl;
+    } else {
+      currentDirectStream = item?.streamUrl;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#06070a] text-white selection:bg-white selection:text-black">
@@ -1218,7 +1300,7 @@ export default function WatchPage({
             </span>
 
             {availableServers.map((s) => {
-              const isActive = (s.id === 'dub_direct' || s.id === 'dub_tmdb' || s.id === 'dub_backup')
+              const isActive = (s.id === 'dub_direct' || s.id === 'dub_tmdb' || s.id === 'dub_cf' || s.id === 'moviebox_direct')
                 ? (useDirectPlayer && activeServer === s.id)
                 : (!useDirectPlayer && activeServer === s.id);
 

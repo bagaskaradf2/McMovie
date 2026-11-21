@@ -74,72 +74,14 @@ export const MovieBoxService = {
   async getTrendingDrama() {
     const catalog = await loadLocalCatalog();
     if (catalog?.trending_drama?.length > 0) return catalog.trending_drama;
-
-    try {
-      const res = await fetch(`${AONEROOM_BASE}/home?host=moviebox01.com`);
-      if (res.ok) {
-        const json = await res.json();
-        const dramaSection = json.data?.items?.find(s => s.title && s.title.includes('Trending Drama'));
-        if (dramaSection?.subjects?.length > 0) {
-          return dramaSection.subjects.map(s => ({
-            id: s.tmdbId || s.subjectId,
-            subjectId: s.subjectId,
-            tmdbId: s.tmdbId,
-            title: s.title,
-            original_title: s.title,
-            poster: s.cover?.url || '',
-            rating: s.imdbRatingValue || 7.5,
-            year: (s.releaseDate || '').slice(0, 4) || '2026',
-            type: 'series',
-            media_type: 'tv',
-            badge: s.corner || 'Drama',
-            synopsis: s.description || '',
-            detailPath: s.detailPath,
-            movieboxEmbedUrl: `https://moviebox01.com/movies/${s.detailPath}?id=${s.subjectId}&type=/movie/detail`
-          }));
-        }
-      }
-    } catch (e) {
-      console.warn('Live drama fetch error:', e);
-    }
-
-    return catalog?.trending_drama || [];
+    return [];
   },
 
   // Trending Movies (with Limited Free badges)
   async getTrendingMovies() {
     const catalog = await loadLocalCatalog();
     if (catalog?.trending_movies?.length > 0) return catalog.trending_movies;
-
-    try {
-      const res = await fetch(`${AONEROOM_BASE}/home?host=moviebox01.com`);
-      if (res.ok) {
-        const json = await res.json();
-        const movieSection = json.data?.items?.find(s => s.title && s.title === 'Trending Movies');
-        if (movieSection?.subjects?.length > 0) {
-          return movieSection.subjects.map(s => ({
-            id: s.tmdbId || s.subjectId,
-            subjectId: s.subjectId,
-            tmdbId: s.tmdbId,
-            title: s.title,
-            original_title: s.title,
-            poster: s.cover?.url || '',
-            rating: s.imdbRatingValue || 7.8,
-            year: (s.releaseDate || '').slice(0, 4) || '2026',
-            type: 'movie',
-            media_type: 'movie',
-            badge: s.corner || 'Limited Free',
-            synopsis: s.description || '',
-            detailPath: s.detailPath,
-            movieboxEmbedUrl: `https://moviebox01.com/movies/${s.detailPath}?id=${s.subjectId}&type=/movie/detail`
-          }));
-        }
-      }
-    } catch (e) {
-      console.warn('Live movies fetch error:', e);
-    }
-
-    return catalog?.trending_movies || [];
+    return [];
   },
 
   // Dedicated Rail / Filter: Film & Series Indonesia Terbaru di Netflix
@@ -309,6 +251,7 @@ export const MovieBoxService = {
 
   async getDetail(id) {
     if (!id) return null;
+    const cleanId = String(id).replace(/^moviebox_/, '').trim();
 
     const catalog = await loadLocalCatalog();
     if (catalog) {
@@ -318,7 +261,13 @@ export const MovieBoxService = {
         ...(catalog.indo_netflix || []),
         ...(catalog.sinetron_series || [])
       ];
-      const found = allItems.find(i => String(i.id) === String(id) || String(i.tmdbId) === String(id) || String(i.subjectId) === String(id));
+      const found = allItems.find(i => 
+        String(i.id) === cleanId || 
+        String(i.tmdbId) === cleanId || 
+        String(i.subjectId) === cleanId ||
+        (i.detailPath && i.detailPath.toLowerCase() === cleanId.toLowerCase()) ||
+        (i.title && i.title.toLowerCase() === cleanId.toLowerCase())
+      );
       if (found) return found;
     }
 

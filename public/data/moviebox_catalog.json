@@ -16,7 +16,26 @@
       "badge": "Disney+",
       "synopsis": "Permaisuri Navier yang tersayang memimpin Kekaisaran Timur bersama Kaisar Sovieshu. Namun, ketika Sovieshu jatuh cinta kepada budak yang kabur dan meminta cerai, Navier akan setuju dengan satu syarat: dia disetujui untuk menikahi Pangeran Heinrey dari Kerajaan Barat.",
       "seasons": 1,
-      "episodes": 10
+      "episodes": 10,
+      "subjectId": "579116273137862480",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/7cf3fcb1e406e8cbdc4cada3d1792a96-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/7cf3fcb1e406e8cbdc4cada3d1792a96-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/100f1322b34e3d801ab3b42654da0243-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/603745c99aefdf1ad0670c443bd90bf8-ld.mp4"
+        }
+      ]
     },
     {
       "id": 300523,
@@ -52,7 +71,26 @@
       "badge": "WeTV",
       "synopsis": "Saksikan tayangan Sleeping with the Enemy kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1
+      "episodes": 1,
+      "subjectId": "5130213474609651224",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/9b83a8b4393d5db16191d199800a4b93-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/9b83a8b4393d5db16191d199800a4b93-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/88b9fdd4adf090855c22cb9ec25f3c60-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/dd2b24d4884fef779cc597a787aa8f1a-ld.mp4"
+        }
+      ]
     },
     {
       "id": 338973,
@@ -70,7 +108,26 @@
       "badge": "ANTV / Netflix",
       "synopsis": "Saksikan tayangan Alas Roban: The Series kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 4
+      "episodes": 4,
+      "subjectId": "6134818076174474520",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/4336f7dd761d35ec808d8b59a5a834b5-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/4336f7dd761d35ec808d8b59a5a834b5-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/93f74aa08ae6e49bc3e39e32f82d5bc9-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/fd83bd25d3189e0405e1be8464fc8e8d-ld.mp4"
+        }
+      ]
     },
     {
       "id": 103540,
@@ -127,6 +184,46 @@
       "episodes": 16
     },
     {
+      "id": "5044430333324805352",
+      "subjectId": "5044430333324805352",
+      "tmdbId": null,
+      "title": "Terbaik Itu Kamu",
+      "original_title": "Terbaik Itu Kamu",
+      "poster": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "poster_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "backdrop": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "backdrop_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "rating": 8.6,
+      "vote_average": 8.6,
+      "year": "2026",
+      "release_date": "2026-10-19",
+      "type": "series",
+      "media_type": "tv",
+      "badge": "Trending Drama",
+      "category": "Sinetron Indonesia",
+      "synopsis": "Sinetron drama romantis Indonesia Terbaik Itu Kamu tayang setiap hari menceritakan liku-liku cinta, pengorbanan, dan kesetiaan. Saksikan full episode kualitas Full HD durasi penuh tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "episodes": 3,
+      "seasons": 1,
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
+      ]
+    },
+    {
       "id": 110639,
       "tmdbId": 110639,
       "title": "Serigala Terakhir: The Series",
@@ -160,7 +257,26 @@
       "badge": "Vision+ Original",
       "synopsis": "Saksikan tayangan Pay Later kualitas Full HD 1080p tanpa iklan.",
       "seasons": 2,
-      "episodes": 9
+      "episodes": 9,
+      "subjectId": "8251929881731301344",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/3c1611cb535e7823b232374db0496265-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/3c1611cb535e7823b232374db0496265-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/afcdb85b45ee30c21ceaa3ccbf8e81fa-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/873a46c3e4c8ece0ff852a73b5a9044c-ld.mp4"
+        }
+      ]
     },
     {
       "id": 205856,
@@ -214,7 +330,26 @@
       "badge": "MAXstream",
       "synopsis": "Saksikan tayangan Main Belakang kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1
+      "episodes": 1,
+      "subjectId": "1320027967761926032",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/c1aef5f2b9402af97f8dd04107e5fbbc-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/c1aef5f2b9402af97f8dd04107e5fbbc-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/dfb9325c5fd26a0fa143713cc9bb848f-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/b8287d926e9e97732fec86af2c5e0508-ld.mp4"
+        }
+      ]
     },
     {
       "id": 340310,
@@ -781,6 +916,46 @@
   ],
   "sinetron_series": [
     {
+      "id": "5044430333324805352",
+      "subjectId": "5044430333324805352",
+      "tmdbId": null,
+      "title": "Terbaik Itu Kamu",
+      "original_title": "Terbaik Itu Kamu",
+      "poster": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "poster_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "backdrop": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "backdrop_path": "https://pbcdnw.aoneroom.com/image/2026/10/23/d2dfc139190d166deca4fa6d111ae779.jpeg",
+      "rating": 8.6,
+      "vote_average": 8.6,
+      "year": "2026",
+      "release_date": "2026-10-19",
+      "type": "series",
+      "media_type": "tv",
+      "badge": "Trending Drama",
+      "category": "Sinetron Indonesia",
+      "synopsis": "Sinetron drama romantis Indonesia Terbaik Itu Kamu tayang setiap hari menceritakan liku-liku cinta, pengorbanan, dan kesetiaan. Saksikan full episode kualitas Full HD durasi penuh tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
+      "episodes": 3,
+      "seasons": 1,
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
+      ]
+    },
+    {
       "id": 338973,
       "tmdbId": 338973,
       "title": "Alas Roban: The Series",
@@ -796,7 +971,26 @@
       "badge": "ANTV / Netflix",
       "synopsis": "Saksikan tayangan Alas Roban: The Series kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 4
+      "episodes": 4,
+      "subjectId": "6134818076174474520",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/4336f7dd761d35ec808d8b59a5a834b5-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/4336f7dd761d35ec808d8b59a5a834b5-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/93f74aa08ae6e49bc3e39e32f82d5bc9-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/fd83bd25d3189e0405e1be8464fc8e8d-ld.mp4"
+        }
+      ]
     },
     {
       "id": 110639,
@@ -832,7 +1026,26 @@
       "badge": "Vision+ Original",
       "synopsis": "Saksikan tayangan Pay Later kualitas Full HD 1080p tanpa iklan.",
       "seasons": 2,
-      "episodes": 9
+      "episodes": 9,
+      "subjectId": "8251929881731301344",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/20/3c1611cb535e7823b232374db0496265-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/3c1611cb535e7823b232374db0496265-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/afcdb85b45ee30c21ceaa3ccbf8e81fa-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/20/873a46c3e4c8ece0ff852a73b5a9044c-ld.mp4"
+        }
+      ]
     },
     {
       "id": 318795,
@@ -868,7 +1081,26 @@
       "badge": "MAXstream",
       "synopsis": "Saksikan tayangan Main Belakang kualitas Full HD 1080p tanpa iklan.",
       "seasons": 1,
-      "episodes": 1
+      "episodes": 1,
+      "subjectId": "1320027967761926032",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/c1aef5f2b9402af97f8dd04107e5fbbc-ld.mp4",
+      "parts": [
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/c1aef5f2b9402af97f8dd04107e5fbbc-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/dfb9325c5fd26a0fa143713cc9bb848f-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/b8287d926e9e97732fec86af2c5e0508-ld.mp4"
+        }
+      ]
     },
     {
       "id": 222614,

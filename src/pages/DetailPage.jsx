@@ -20,6 +20,7 @@ import {
 
 import { TmdbService } from '../services/tmdbService';
 import { DubIndoService } from '../services/dubIndoService';
+import { MovieBoxService } from '../services/movieBoxService';
 import { StorageService } from '../services/storageService';
 import MovieCard from '../components/MovieCard';
 
@@ -46,76 +47,119 @@ export default function DetailPage({ type: propType }) {
     setShowTrailer(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    if (type === 'dub') {
-      DubIndoService.getMovieOrSeriesById(id).then(async (found) => {
-        if (!isMounted) return;
-        if (found) {
-          if (!found.tmdbId) {
-            const resolvedTmdb = await DubIndoService.resolveDubTmdbId(found.title, found.year);
-            if (resolvedTmdb) {
-              found.tmdbId = resolvedTmdb;
-            }
-          }
-
-          // If TMDB ID is available, fetch rich cast & crew metadata
-          if (found.tmdbId) {
-            try {
-              const tmdbData = await TmdbService.getDetails(found.tmdbId, found.media_type || 'movie');
-              if (tmdbData && isMounted) {
-                setDetails(tmdbData);
-              }
-            } catch (e) {
-              console.warn('Could not fetch TMDB details for dub item:', e);
-            }
-          }
-
-          setItem(found);
-          setIsWatchlisted(StorageService.isWatchlisted(found.id));
-        }
-        setLoading(false);
-      });
-    } else {
-      const mediaType = type === 'tv' ? 'tv' : 'movie';
-      TmdbService.getDetails(id, mediaType)
-        .then((data) => {
-          if (!isMounted) return;
-          const fullItem = { ...data, media_type: mediaType };
+    async function loadDetailPage() {
+      // 1. FAST PATH: MovieBox & Local Scraped Catalog lookup (0ms instant response)
+      try {
+        const localItem = await MovieBoxService.getDetail(id);
+        if (localItem && isMounted) {
+          const fullItem = { ...localItem, media_type: localItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
           setItem(fullItem);
           setDetails(fullItem);
           setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
 
-          if (mediaType === 'tv') {
-            const initialSeason = data?.seasons?.find(s => s.season_number > 0)?.season_number || 1;
-            setSelectedSeason(initialSeason);
-            fetchSeason(id, initialSeason);
+          if (fullItem.parts && fullItem.parts.length > 0) {
+            const partsEpisodes = fullItem.parts.map(p => ({
+              episode_number: p.part,
+              name: p.name || `Episode 1 Part ${p.part}`,
+              overview: `Bagian ${p.part} durasi penuh tanpa iklan.`,
+              still_path: fullItem.backdrop_path || fullItem.poster_path
+            }));
+            setSeasonData({ episodes: partsEpisodes, season_number: 1 });
+            setSelectedSeason(1);
+          } else if (fullItem.episodes && typeof fullItem.episodes === 'number') {
+            const genEps = Array.from({ length: fullItem.episodes }, (_, i) => ({
+              episode_number: i + 1,
+              name: `Episode ${i + 1}`,
+              overview: `Episode ${i + 1} dari ${fullItem.title || 'Serial'}`,
+              still_path: fullItem.backdrop_path || fullItem.poster_path
+            }));
+            setSeasonData({ episodes: genEps, season_number: 1 });
+            setSelectedSeason(1);
+          }
+
+          setLoading(false);
+
+          // If item has a TMDB ID, optionally fetch extra seasons/credits in background
+          if (fullItem.tmdbId && fullItem.media_type === 'tv' && (!fullItem.parts || fullItem.parts.length === 0)) {
+            fetchSeason(fullItem.tmdbId, 1);
+          }
+          return;
+        }
+      } catch (e) {
+        console.warn('Fast path detail catalog lookup error:', e);
+      }
+
+      // 2. DUB INDO PATH
+      if (type === 'dub') {
+        DubIndoService.getMovieOrSeriesById(id).then(async (found) => {
+          if (!isMounted) return;
+          if (found) {
+            if (!found.tmdbId) {
+              const resolvedTmdb = await DubIndoService.resolveDubTmdbId(found.title, found.year);
+              if (resolvedTmdb) {
+                found.tmdbId = resolvedTmdb;
+              }
+            }
+
+            // If TMDB ID is available, fetch rich cast & crew metadata
+            if (found.tmdbId) {
+              try {
+                const tmdbData = await TmdbService.getDetails(found.tmdbId, found.media_type || 'movie');
+                if (tmdbData && isMounted) {
+                  setDetails(tmdbData);
+                }
+              } catch (e) {
+                console.warn('Could not fetch TMDB details for dub item:', e);
+              }
+            }
+
+            setItem(found);
+            setIsWatchlisted(StorageService.isWatchlisted(found.id));
           }
           setLoading(false);
-        })
-        .catch(async (err) => {
-          console.error('Failed to load details from TMDB:', err);
-          try {
-            const catalogRes = await fetch('/data/moviebox_catalog.json');
-            const cat = await catalogRes.json();
-            const allItems = [
-              ...(cat.trending_drama || []),
-              ...(cat.trending_movies || []),
-              ...(cat.indo_netflix || []),
-              ...(cat.sinetron_series || [])
-            ];
-            const found = allItems.find(i => String(i.id) === String(id) || String(i.tmdbId) === String(id));
-            if (found && isMounted) {
-              setItem(found);
-              setDetails(found);
-              setIsWatchlisted(StorageService.isWatchlisted(found.id));
-              setLoading(false);
-              return;
-            }
-          } catch (e) {
-            console.warn('Fallback catalog search error:', e);
-          }
-          if (isMounted) setLoading(false);
         });
+      } else {
+        // 3. TMDB PATH
+        const mediaType = type === 'tv' ? 'tv' : 'movie';
+        try {
+          const data = await TmdbService.getDetails(id, mediaType);
+          if (!isMounted) return;
+
+          if (data) {
+            const fullItem = { ...data, media_type: mediaType };
+            setItem(fullItem);
+            setDetails(fullItem);
+            setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
+
+            if (mediaType === 'tv') {
+              const initialSeason = data?.seasons?.find(s => s.season_number > 0)?.season_number || 1;
+              setSelectedSeason(initialSeason);
+              fetchSeason(id, initialSeason);
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('Failed to load details from TMDB:', err);
+        }
+
+        // 4. Secondary fallback
+        try {
+          const fallback = await MovieBoxService.getDetail(id);
+          if (fallback && isMounted) {
+            setItem(fallback);
+            setDetails(fallback);
+            setIsWatchlisted(StorageService.isWatchlisted(fallback.id));
+            setLoading(false);
+            return;
+          }
+        } catch (e) {}
+
+        if (isMounted) setLoading(false);
+      }
     }
+
+    loadDetailPage();
 
     return () => {
       isMounted = false;

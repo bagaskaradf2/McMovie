@@ -37,12 +37,19 @@ async function tmdbFetch(endpoint, params = {}) {
     const url = `${TMDB_BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}${queryParams.toString()}`;
 
     try {
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (res.status === 401 || res.status === 429) {
         // Key might be rate limited or invalid, try next key
         currentKeyIndex = (currentKeyIndex + 1) % DEFAULT_KEYS.length;
         attempts++;
         continue;
+      }
+      if (res.status === 404) {
+        return null;
       }
       if (!res.ok) {
         throw new Error(`TMDB error HTTP ${res.status}`);
@@ -50,8 +57,8 @@ async function tmdbFetch(endpoint, params = {}) {
       return await res.json();
     } catch (err) {
       if (attempts >= maxAttempts - 1) {
-        console.error('All TMDB API key attempts failed:', err);
-        throw err;
+        console.warn('All TMDB API key attempts failed or timed out:', err.message);
+        return null;
       }
       currentKeyIndex = (currentKeyIndex + 1) % DEFAULT_KEYS.length;
       attempts++;
