@@ -1,13 +1,15 @@
 /**
  * Embed Service for McMovies
  * Comprehensive multi-server provider list from FMHY and CinemaOS streaming backends.
+ * Solves duration limits & VIP restrictions by providing VidLink 4K, AutoEmbed, SuperEmbed,
+ * 2Embed, SmashyStream, and MovieBox Official Mirror.
  */
 
 export const STREAM_SERVERS = [
   {
     id: 'vidlink',
     name: 'VidLink 4K (CinemaOS)',
-    tag: 'CinemaOS Default • Subtitle Lengkap',
+    tag: 'CinemaOS Default • Subtitle Lengkap • Durasi Penuh (Bebas 15 Menit)',
     badge: '1080p/4K',
     getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
       if (mediaType === 'tv') {
@@ -19,7 +21,7 @@ export const STREAM_SERVERS = [
   {
     id: 'autoembed',
     name: 'AutoEmbed Multi-Sub',
-    tag: 'Subtitle Indonesia & Multi-Server',
+    tag: 'Subtitle Indonesia & Multi-Server • Full Video Bebas VIP',
     badge: 'Full HD',
     getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
       if (mediaType === 'tv') {
@@ -31,7 +33,7 @@ export const STREAM_SERVERS = [
   {
     id: 'superembed',
     name: 'SuperEmbed HD',
-    tag: 'Mirror Cadangan Episode Lengkap',
+    tag: 'Mirror Cadangan Episode Lengkap • Durasi Penuh Tanpa Limit',
     badge: 'HD',
     getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
       if (mediaType === 'tv') {
@@ -43,7 +45,7 @@ export const STREAM_SERVERS = [
   {
     id: 'two_embed',
     name: '2Embed VIP',
-    tag: 'Global Stream Mirror',
+    tag: 'Global Stream Mirror • Tanpa Potongan 15 Menit',
     badge: '1080p',
     getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
       if (mediaType === 'tv') {
@@ -62,6 +64,19 @@ export const STREAM_SERVERS = [
         return `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${season}&episode=${episode}`;
       }
       return `https://embed.smashystream.com/playere.php?tmdb=${id}`;
+    }
+  },
+  {
+    id: 'moviebox_mirror',
+    name: '⚡ MovieBox Official Mirror',
+    tag: 'Live Web Stream moviebox01.com (Direct Embed)',
+    badge: 'MovieBox',
+    getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1, item = null) => {
+      if (item?.movieboxEmbedUrl) return item.movieboxEmbedUrl;
+      if (item?.detailPath) {
+        return `https://moviebox01.com/movies/${item.detailPath}?id=${item.subjectId || id}&type=/movie/detail`;
+      }
+      return `https://moviebox01.com/`;
     }
   },
   {
@@ -90,8 +105,8 @@ export const STREAM_SERVERS = [
   }
 ];
 
-export function getEmbedUrl(serverId, id, mediaType = 'movie', season = 1, episode = 1) {
+export function getEmbedUrl(serverId, id, mediaType = 'movie', season = 1, episode = 1, item = null) {
   const cleanId = String(id).replace(/^dub_/, '');
   const server = STREAM_SERVERS.find(s => s.id === serverId) || STREAM_SERVERS[0];
-  return server.getEmbedUrl(cleanId, mediaType, season, episode);
+  return server.getEmbedUrl(cleanId, mediaType, season, episode, item);
 }

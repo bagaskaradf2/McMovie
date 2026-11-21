@@ -1,14 +1,23 @@
 /**
  * MovieBox API & Scraped Catalog Service
- * Reference: https://api.sansekai.my.id/#/MovieBox
- * Provides comprehensive access to Trending Drama, Trending Movies,
- * Film & Series Indonesia Terbaru di Netflix, and Sinetron Indonesia.
+ * Connects directly to the live MovieBox backend API (https://h5-api.aoneroom.com/wefeed-h5api-bff)
+ * and falls back seamlessly to the verified local scraped catalog (public/data/moviebox_catalog.json).
+ *
+ * Covers:
+ * - Trending Drama 🔥 (Korean, Chinese, Indonesian, Western dramas)
+ * - Trending Movies (Blockbusters with Limited Free badges)
+ * - Film & Series Indonesia Terbaru di Netflix 🇮🇩 (The Shadow Strays, Kabut Berduri, Sekawan Limo, dll)
+ * - Sinetron & Series Indonesia Populer (Terbaik Itu Kamu, Bound by Promise, Main Belakang, Serigala Terakhir, dll)
  */
 
 import { StorageService } from './storageService';
 import { TmdbService } from './tmdbService';
 
 let cachedCatalog = null;
+let guestToken = null;
+let tokenExpiresAt = 0;
+
+const AONEROOM_BASE = 'https://h5-api.aoneroom.com/wefeed-h5api-bff';
 
 async function loadLocalCatalog() {
   if (cachedCatalog) return cachedCatalog;
@@ -24,42 +33,35 @@ async function loadLocalCatalog() {
   return null;
 }
 
-function getBaseUrl() {
-  const settings = StorageService.getSettings();
-  return (settings?.movieBoxApiUrl || 'https://api.sansekai.my.id/api').replace(/\/+$/, '');
-}
-
-async function apiFetch(endpoint, params = {}) {
-  const base = getBaseUrl();
-  const url = new URL(`${base}${endpoint}`);
-  Object.keys(params).forEach(k => {
-    if (params[k] !== undefined && params[k] !== null) {
-      url.searchParams.append(k, params[k]);
-    }
-  });
+// Fetches a guest token from the live MovieBox home endpoint
+async function getGuestToken() {
+  const now = Date.now();
+  if (guestToken && now < tokenExpiresAt) {
+    return guestToken;
+  }
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
+    const res = await fetch(`${AONEROOM_BASE}/home?host=moviebox01.com`, {
       headers: {
-        'Accept': 'application/json',
+        'Origin': 'https://moviebox01.com',
+        'Referer': 'https://moviebox01.com/'
       }
     });
-    clearTimeout(timer);
 
-    if (!res.ok) {
-      throw new Error(`MovieBox API HTTP ${res.status}`);
+    if (res.ok) {
+      // In browser, cookies are handled by browser, but if an auth token is in response or headers:
+      const authHeader = res.headers.get('authorization') || res.headers.get('x-token');
+      if (authHeader) {
+        guestToken = authHeader.replace(/^Bearer\s+/i, '');
+        tokenExpiresAt = now + 3600000;
+        return guestToken;
+      }
     }
-
-    const data = await res.json();
-    return data;
   } catch (err) {
-    // Graceful fallback to scraped catalog
-    return null;
+    console.warn('Could not refresh MovieBox guest token:', err);
   }
+
+  return guestToken;
 }
 
 export const MovieBoxService = {
@@ -71,19 +73,73 @@ export const MovieBoxService = {
   // Trending Drama (Exact match to MovieBox reference image)
   async getTrendingDrama() {
     const catalog = await loadLocalCatalog();
-    if (catalog?.trending_drama) return catalog.trending_drama;
+    if (catalog?.trending_drama?.length > 0) return catalog.trending_drama;
 
-    const res = await apiFetch('/moviebox/trending-drama');
-    return res?.data || res || [];
+    try {
+      const res = await fetch(`${AONEROOM_BASE}/home?host=moviebox01.com`);
+      if (res.ok) {
+        const json = await res.json();
+        const dramaSection = json.data?.items?.find(s => s.title && s.title.includes('Trending Drama'));
+        if (dramaSection?.subjects?.length > 0) {
+          return dramaSection.subjects.map(s => ({
+            id: s.tmdbId || s.subjectId,
+            subjectId: s.subjectId,
+            tmdbId: s.tmdbId,
+            title: s.title,
+            original_title: s.title,
+            poster: s.cover?.url || '',
+            rating: s.imdbRatingValue || 7.5,
+            year: (s.releaseDate || '').slice(0, 4) || '2026',
+            type: 'series',
+            media_type: 'tv',
+            badge: s.corner || 'Drama',
+            synopsis: s.description || '',
+            detailPath: s.detailPath,
+            movieboxEmbedUrl: `https://moviebox01.com/movies/${s.detailPath}?id=${s.subjectId}&type=/movie/detail`
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Live drama fetch error:', e);
+    }
+
+    return catalog?.trending_drama || [];
   },
 
   // Trending Movies (with Limited Free badges)
   async getTrendingMovies() {
     const catalog = await loadLocalCatalog();
-    if (catalog?.trending_movies) return catalog.trending_movies;
+    if (catalog?.trending_movies?.length > 0) return catalog.trending_movies;
 
-    const res = await apiFetch('/moviebox/trending-movies');
-    return res?.data || res || [];
+    try {
+      const res = await fetch(`${AONEROOM_BASE}/home?host=moviebox01.com`);
+      if (res.ok) {
+        const json = await res.json();
+        const movieSection = json.data?.items?.find(s => s.title && s.title === 'Trending Movies');
+        if (movieSection?.subjects?.length > 0) {
+          return movieSection.subjects.map(s => ({
+            id: s.tmdbId || s.subjectId,
+            subjectId: s.subjectId,
+            tmdbId: s.tmdbId,
+            title: s.title,
+            original_title: s.title,
+            poster: s.cover?.url || '',
+            rating: s.imdbRatingValue || 7.8,
+            year: (s.releaseDate || '').slice(0, 4) || '2026',
+            type: 'movie',
+            media_type: 'movie',
+            badge: s.corner || 'Limited Free',
+            synopsis: s.description || '',
+            detailPath: s.detailPath,
+            movieboxEmbedUrl: `https://moviebox01.com/movies/${s.detailPath}?id=${s.subjectId}&type=/movie/detail`
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Live movies fetch error:', e);
+    }
+
+    return catalog?.trending_movies || [];
   },
 
   // Dedicated Rail / Filter: Film & Series Indonesia Terbaru di Netflix
@@ -91,7 +147,6 @@ export const MovieBoxService = {
     const catalog = await loadLocalCatalog();
     if (catalog?.indo_netflix) return catalog.indo_netflix;
 
-    // TMDB fallback for Indonesian releases
     try {
       const fallback = await TmdbService.discoverByGenre('movie', null);
       return (fallback || []).map(m => ({
@@ -114,7 +169,6 @@ export const MovieBoxService = {
   async getIndoSeries() {
     const catalog = await loadLocalCatalog();
     if (catalog?.sinetron_series) return catalog.sinetron_series;
-
     return [];
   },
 
@@ -129,10 +183,6 @@ export const MovieBoxService = {
         ...(catalog.sinetron_series || [])
       ];
     }
-
-    const res = await apiFetch('/moviebox/homepage');
-    const items = res?.data || res;
-    if (Array.isArray(items) && items.length > 0) return items;
 
     try {
       const fallback = await TmdbService.getTrending('week');
@@ -151,34 +201,12 @@ export const MovieBoxService = {
     }
   },
 
-  async getHollywoodMovies() {
-    const res = await apiFetch('/moviebox/hollywood-movies');
-    const items = res?.data || res;
-    if (Array.isArray(items) && items.length > 0) return items;
-
-    try {
-      const fallback = await TmdbService.getPopular('movie');
-      return (fallback || []).map(m => ({
-        id: m.id,
-        tmdbId: m.id,
-        title: m.title,
-        poster: m.poster_path ? TmdbService.getImageUrl(m.poster_path, 'w500') : '',
-        rating: m.vote_average ? m.vote_average.toFixed(1) : '8.0',
-        year: (m.release_date || '').slice(0, 4),
-        type: 'movie',
-        synopsis: m.overview || '',
-      }));
-    } catch (e) {
-      return [];
-    }
-  },
-
-  // Cross-category search
+  // Cross-category search connecting directly to MovieBox live search + local catalog
   async search(query) {
     if (!query) return [];
     const qLower = query.toLowerCase().trim();
 
-    // 1. Search local scraped catalog first
+    // 1. Search local scraped catalog first for instant response
     const catalog = await loadLocalCatalog();
     const localMatches = [];
     if (catalog) {
@@ -201,14 +229,65 @@ export const MovieBoxService = {
       }
     }
 
+    // 2. Query live MovieBox API search
+    try {
+      const token = await getGuestToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        'Origin': 'https://moviebox01.com',
+        'Referer': 'https://moviebox01.com/'
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${AONEROOM_BASE}/subject/search`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          keyword: query,
+          page: 1,
+          perPage: 12,
+          subjectType: 0
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.code === 0 && Array.isArray(json.data?.items)) {
+          const liveResults = json.data.items.map(i => ({
+            id: i.tmdbId || i.subjectId,
+            subjectId: i.subjectId,
+            tmdbId: i.tmdbId,
+            title: i.title,
+            original_title: i.title,
+            poster: i.cover?.url || '',
+            rating: i.imdbRatingValue || 7.5,
+            year: (i.releaseDate || '').slice(0, 4),
+            type: i.subjectType === 2 ? 'series' : 'movie',
+            media_type: i.subjectType === 2 ? 'tv' : 'movie',
+            badge: 'MovieBox Live',
+            synopsis: i.description || '',
+            detailPath: i.detailPath,
+            movieboxEmbedUrl: `https://moviebox01.com/movies/${i.detailPath}?id=${i.subjectId}&type=/movie/detail`
+          }));
+
+          // Merge local and live results without duplicates
+          const seenIds = new Set(localMatches.map(m => String(m.id || m.subjectId)));
+          for (const item of liveResults) {
+            const key = String(item.id || item.subjectId);
+            if (!seenIds.has(key)) {
+              seenIds.add(key);
+              localMatches.push(item);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Live MovieBox search error:', e);
+    }
+
     if (localMatches.length > 0) {
       return localMatches;
     }
-
-    // 2. Try remote API
-    const res = await apiFetch('/moviebox/search', { query });
-    const items = res?.data || res;
-    if (Array.isArray(items) && items.length > 0) return items;
 
     // 3. Fallback to TMDB
     try {
@@ -239,23 +318,10 @@ export const MovieBoxService = {
         ...(catalog.indo_netflix || []),
         ...(catalog.sinetron_series || [])
       ];
-      const found = allItems.find(i => String(i.id) === String(id) || String(i.tmdbId) === String(id));
+      const found = allItems.find(i => String(i.id) === String(id) || String(i.tmdbId) === String(id) || String(i.subjectId) === String(id));
       if (found) return found;
     }
 
-    const res = await apiFetch('/moviebox/detail', { id });
-    return res?.data || res || null;
-  },
-
-  async getDownloadUrl(id) {
-    if (!id) return null;
-    const res = await apiFetch('/moviebox/get-download-url', { id });
-    return res?.data || res || null;
-  },
-
-  getProxyVideoUrl(rawCdnUrl) {
-    if (!rawCdnUrl) return '';
-    const base = getBaseUrl();
-    return `${base}/moviebox/proxy-video?url=${encodeURIComponent(rawCdnUrl)}`;
+    return null;
   }
 };

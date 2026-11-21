@@ -688,7 +688,7 @@ export default function WatchPage({
   const resolvedTargetId = item?.isDubIndo ? (item.tmdbId || item.rawId) : (item?.tmdbId || item?.id || propId);
   const embedUrl = (activeServer === 'dub_embed' && item?.embedToken)
     ? `https://www.dubbindo.site/embed/${item.embedToken}`
-    : getEmbedUrl(activeServer, resolvedTargetId, isSeries ? 'tv' : 'movie', currentSeason, currentEpisode);
+    : getEmbedUrl(activeServer, resolvedTargetId, isSeries ? 'tv' : 'movie', currentSeason, currentEpisode, item);
 
   // Determine current active direct stream URL
   const currentDirectStream = activeServer === 'dub_direct'
@@ -1192,6 +1192,23 @@ export default function WatchPage({
             </button>
           </div>
         )}
+
+        {/* Full Access & Durasi Penuh Notice */}
+        <div className="mt-3 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-950/40 via-zinc-900/60 to-zinc-900/40 border border-emerald-500/20 text-zinc-300 text-xs flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-extrabold text-[10px] uppercase tracking-wide border border-emerald-500/30">
+              Full Access • Durasi Penuh
+            </span>
+            <span className="text-zinc-300 text-[11px] sm:text-xs">
+              Gunakan server <b>VidLink 4K</b>, <b>AutoEmbed</b>, atau <b>SuperEmbed</b> untuk memutar film/series secara tuntas tanpa terpotong 15 menit & bebas VIP.
+            </span>
+          </div>
+          {item?.movieboxEmbedUrl && (
+            <span className="text-[11px] text-amber-400 font-medium whitespace-nowrap hidden sm:inline">
+              ⚡ MovieBox Live Terhubung
+            </span>
+          )}
+        </div>
 
         {/* Minimal CinemaOS Server Toolbar */}
         <div className="mt-3.5 px-3 sm:px-4 py-2.5 rounded-2xl bg-[#0a0c14]/90 backdrop-blur-xl border border-white/[0.08] shadow-xl flex flex-wrap items-center justify-between gap-3">
