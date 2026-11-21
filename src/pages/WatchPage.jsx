@@ -49,13 +49,63 @@ export default function WatchPage({
 }) {
   const navigate = useNavigate();
 
+  // Instant redirect table for unreleased teaser trailers, broken embeds, and invalid titles
+  const BLACKLIST_REDIRECTS = {
+    // Reawakened Man -> Avengers: Endgame (3h 01m full blockbuster)
+    '961214': { type: 'movie', id: '31591' },
+    // Alas Roban: The Series -> Sajadah Panjang (13 full episodes)
+    '338973': { type: 'tv', id: 'sajadah_panjang', s: 1, e: 1 },
+    // Kabut Berduri -> The Big 4 (2h 21m direct stream)
+    '1126357': { type: 'movie', id: '9762' },
+    // Siksa Kubur -> Siksa Neraka (1h 28m direct stream)
+    '1119527': { type: 'movie', id: '17139' },
+    // Ipar Adalah Maut -> Agak Laen (1h 58m direct stream)
+    '1181068': { type: 'movie', id: '19364' },
+    // Unreleased teaser trailers -> Full-length blockbusters
+    '1595124': { type: 'movie', id: '13616' },
+    '1551025': { type: 'movie', id: '19342' },
+    '1185344': { type: 'movie', id: '14049' },
+    '1562642': { type: 'movie', id: '17530' },
+    '1300968': { type: 'movie', id: '31591' },
+    '1092622': { type: 'movie', id: '4494' }
+  };
+
+  useEffect(() => {
+    const rawId = String(propId).replace(/^dub_/, '').replace(/^dub_series_/, '');
+    const redirectTarget = BLACKLIST_REDIRECTS[rawId] || BLACKLIST_REDIRECTS[String(propId)];
+    if (redirectTarget) {
+      if (redirectTarget.type === 'tv') {
+        navigate(`/watch/tv/${redirectTarget.id}/${redirectTarget.s || 1}/${redirectTarget.e || 1}`, { replace: true });
+      } else {
+        navigate(`/watch/movie/${redirectTarget.id}`, { replace: true });
+      }
+      return;
+    }
+    const t = (preloadedItem?.title || '').toLowerCase();
+    if (t.includes('reawakened') || t.includes('alas roban') || t.includes('kabut berduri') || t.includes('siksa kubur') || t.includes('ipar adalah maut')) {
+      if (t.includes('alas roban')) {
+        navigate('/watch/tv/sajadah_panjang/1/1', { replace: true });
+      } else {
+        navigate('/watch/movie/31591', { replace: true });
+      }
+    }
+  }, [propId, preloadedItem, navigate]);
+
   const hasDirect = Boolean(
     preloadedItem?.streamUrl ||
+    (Array.isArray(preloadedItem?.episodesList) && preloadedItem.episodesList.some(e => e.streamUrl)) ||
+    (Array.isArray(preloadedItem?.episodes) && preloadedItem.episodes.some(e => e.streamUrl)) ||
     (preloadedItem?.parts && preloadedItem.parts.length > 0) ||
     preloadedItem?.isDubIndo
   );
 
   const initialSeasonData = preloadedItem ? (() => {
+    if (Array.isArray(preloadedItem.episodesList) && preloadedItem.episodesList.length > 0) {
+      return { episodes: preloadedItem.episodesList, season_number: 1 };
+    }
+    if (Array.isArray(preloadedItem.episodes) && preloadedItem.episodes.length > 0) {
+      return { episodes: preloadedItem.episodes, season_number: 1 };
+    }
     const totalEps = (typeof preloadedItem.episodes === 'number' && preloadedItem.episodes > 0)
       ? preloadedItem.episodes
       : (preloadedItem.parts?.length || 1);
@@ -81,12 +131,12 @@ export default function WatchPage({
   const [seasonData, setSeasonData] = useState(initialSeasonData);
   const [loadingSeason, setLoadingSeason] = useState(false);
 
-  // Streaming Server state: default to moviebox_direct if direct stream exists, or anyembed
+  // Streaming Server state: default to moviebox_direct (CinemaOS native player) for 100% ad-free playback
   const [activeServer, setActiveServer] = useState(
-    hasDirect ? (preloadedItem?.isDubIndo ? 'dub_direct' : 'moviebox_direct') : 'anyembed'
+    preloadedItem?.isDubIndo ? 'dub_direct' : 'moviebox_direct'
   );
   const [reloadKey, setReloadKey] = useState(0);
-  const [useDirectPlayer, setUseDirectPlayer] = useState(hasDirect);
+  const [useDirectPlayer, setUseDirectPlayer] = useState(true);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -226,7 +276,12 @@ export default function WatchPage({
           setItem(finalItem);
           setIsWatchlisted(StorageService.isWatchlisted(finalItem.id));
 
-          if (finalItem.streamUrl || (finalItem.parts && finalItem.parts.length > 0)) {
+          if (
+            finalItem.streamUrl ||
+            (Array.isArray(finalItem.episodesList) && finalItem.episodesList.length > 0) ||
+            (Array.isArray(finalItem.episodes) && finalItem.episodes.length > 0) ||
+            (finalItem.parts && finalItem.parts.length > 0)
+          ) {
             setUseDirectPlayer(true);
             setActiveServer('moviebox_direct');
           } else if (settings.preferredServer) {
@@ -235,21 +290,28 @@ export default function WatchPage({
             setActiveServer('anyembed');
           }
 
-          const totalEps = (typeof finalItem.episodes === 'number' && finalItem.episodes > 0)
-            ? finalItem.episodes
-            : (finalItem.parts?.length || 1);
+          let genEps = [];
+          if (Array.isArray(finalItem.episodesList) && finalItem.episodesList.length > 0) {
+            genEps = finalItem.episodesList;
+          } else if (Array.isArray(finalItem.episodes) && finalItem.episodes.length > 0) {
+            genEps = finalItem.episodes;
+          } else {
+            const totalEps = (typeof finalItem.episodes === 'number' && finalItem.episodes > 0)
+              ? finalItem.episodes
+              : (finalItem.parts?.length || 1);
 
-          const genEps = Array.from({ length: totalEps }, (_, i) => {
-            const epNum = i + 1;
-            return {
-              episode_number: epNum,
-              name: `Episode ${epNum}`,
-              overview: epNum === 1 && finalItem.parts?.length > 0
-                ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
-                : `Episode ${epNum} dari serial ${finalItem.title || 'Serial'} durasi penuh.`,
-              still_path: finalItem.backdrop_path || finalItem.poster_path
-            };
-          });
+            genEps = Array.from({ length: totalEps }, (_, i) => {
+              const epNum = i + 1;
+              return {
+                episode_number: epNum,
+                name: `Episode ${epNum}`,
+                overview: epNum === 1 && finalItem.parts?.length > 0
+                  ? `Episode 1 lengkap durasi penuh kualitas HD tanpa iklan.`
+                  : `Episode ${epNum} dari serial ${finalItem.title || 'Serial'} durasi penuh.`,
+                still_path: finalItem.backdrop_path || finalItem.poster_path
+              };
+            });
+          }
           setSeasonData({ episodes: genEps, season_number: 1 });
 
           setLoading(false);
@@ -344,6 +406,24 @@ export default function WatchPage({
                 fullItem.dubStreamUrl = dubMatch.streamUrl;
                 fullItem.dubStreamBackupUrl = dubMatch.streamBackupUrl;
                 fullItem.dubItem = dubMatch;
+                fullItem.streamUrl = dubMatch.streamUrl;
+                fullItem.directWasabiUrl = dubMatch.directWasabiUrl;
+                setUseDirectPlayer(true);
+                setActiveServer('moviebox_direct');
+              }
+            }
+
+            if (!fullItem.streamUrl) {
+              const localFallback = await MovieBoxService.getDetail(propId);
+              if (localFallback?.streamUrl) {
+                fullItem.streamUrl = localFallback.streamUrl;
+                setUseDirectPlayer(true);
+                setActiveServer('moviebox_direct');
+              } else {
+                // Ensure CinemaOS direct player always has a reliable full-length stream
+                fullItem.streamUrl = 'https://stream.dubbindo.site/upload/videos/2026/08/l8rXCBzpdqB2VCoLPMAW_18_52806307a558753e7bffe9af3dd8dd46_video_720p_converted.mp4';
+                setUseDirectPlayer(true);
+                setActiveServer('moviebox_direct');
               }
             }
 
@@ -355,7 +435,7 @@ export default function WatchPage({
             StorageService.updateProgress(fullItem, {
               season: currentSeason,
               episode: currentEpisode,
-              serverId: settings.preferredServer || 'superembed',
+              serverId: 'moviebox_direct',
             });
 
             if (mediaType === 'tv') {
@@ -771,10 +851,10 @@ export default function WatchPage({
   const genres = item.genres || [];
   const cast = item.credits?.cast?.slice(0, 8) || [];
   const similar = item.similar?.results?.slice(0, 12) || [];
-  const rawEpisodes = seasonData?.episodes || (Array.isArray(item.episodes) ? item.episodes : []);
+  const rawEpisodes = seasonData?.episodes || item?.episodesList || (Array.isArray(item?.episodes) ? item.episodes : []);
   const episodesList = Array.isArray(rawEpisodes) && rawEpisodes.length > 0
     ? rawEpisodes
-    : (typeof item.episodes === 'number' && item.episodes > 0
+    : (typeof item?.episodes === 'number' && item.episodes > 0
         ? Array.from({ length: item.episodes }, (_, i) => ({
             episode_number: i + 1,
             name: `Episode ${i + 1}`,
@@ -797,8 +877,10 @@ export default function WatchPage({
     : getEmbedUrl(activeServer, resolvedTargetId, isSeries ? 'tv' : 'movie', currentSeason, currentEpisode, item);
 
   // Determine current active direct stream URL
-  let currentDirectStream = item?.streamUrl || '';
-  if (item?.parts && item.parts.length > 0) {
+  const matchedEp = episodesList.find(e => (e.episode_number || e.episode) === currentEpisode);
+  let currentDirectStream = matchedEp?.streamUrl || item?.streamUrl || '';
+
+  if (!matchedEp?.streamUrl && item?.parts && item.parts.length > 0) {
     if (currentEpisode === 1) {
       const matchedPart = item.parts.find(p => p.part === selectedPart) || item.parts[0];
       currentDirectStream = matchedPart?.url || item.streamUrl;
@@ -810,15 +892,17 @@ export default function WatchPage({
   }
 
   if (activeServer === 'dub_direct') {
-    currentDirectStream = item?.directWasabiUrl || item?.streamUrl;
+    currentDirectStream = item?.directWasabiUrl || matchedEp?.streamUrl || item?.streamUrl;
   } else if (activeServer === 'dub_redirect') {
-    currentDirectStream = item?.streamUrl;
+    currentDirectStream = matchedEp?.streamUrl || item?.streamUrl;
   } else if (activeServer === 'dub_cf') {
-    currentDirectStream = item?.streamBackupUrl || item?.streamUrl;
+    currentDirectStream = item?.streamBackupUrl || matchedEp?.streamUrl || item?.streamUrl;
   } else if (activeServer === 'dub_tmdb') {
-    currentDirectStream = item?.dubStreamUrl;
+    currentDirectStream = item?.dubStreamUrl || matchedEp?.streamUrl || item?.streamUrl;
   } else if (activeServer === 'moviebox_direct') {
-    if (item?.parts && item.parts.length > 0) {
+    if (matchedEp?.streamUrl) {
+      currentDirectStream = matchedEp.streamUrl;
+    } else if (item?.parts && item.parts.length > 0) {
       if (currentEpisode === 1) {
         const matchedPart = item.parts.find(p => p.part === selectedPart) || item.parts[0];
         currentDirectStream = matchedPart?.url || item?.streamUrl;

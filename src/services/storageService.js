@@ -76,10 +76,26 @@ export const StorageService = {
 
   // Continue Watching methods
   getContinueWatching() {
-    return safeParse(localStorage.getItem(KEYS.CONTINUE_WATCHING), []);
+    const raw = safeParse(localStorage.getItem(KEYS.CONTINUE_WATCHING), []);
+    // Filter out unreleased titles, obsolete trailers, and broken items
+    const blacklist = ['961214', '338973', '1126357', '1119527', '1181068', '1300968', '1595124', '1551025', '1185344', '1562642', '1092622'];
+    const blacklistWords = ['reawakened', 'alas roban', 'kabut berduri', 'siksa kubur', 'ipar adalah maut', 'guarding stars', 'ghost soldier', 'steps', 'the beast'];
+    return raw.filter(i => {
+      if (blacklist.includes(String(i.id))) return false;
+      const t = (i.title || '').toLowerCase();
+      if (blacklistWords.some(w => t.includes(w))) return false;
+      return true;
+    });
   },
 
-  updateProgress(item, { season = 1, episode = 1, currentTime = 0, duration = 0, serverId = 'vidlink' }) {
+  updateProgress(item, { season = 1, episode = 1, currentTime = 0, duration = 0, serverId = 'moviebox_direct' }) {
+    if (!item) return;
+    const blacklist = ['961214', '338973', '1126357', '1119527', '1181068', '1300968', '1595124', '1551025', '1185344', '1562642', '1092622'];
+    const blacklistWords = ['reawakened', 'alas roban', 'kabut berduri', 'siksa kubur', 'ipar adalah maut', 'guarding stars', 'ghost soldier', 'steps', 'the beast'];
+    if (blacklist.includes(String(item.id))) return;
+    const t = (item.title || item.name || '').toLowerCase();
+    if (blacklistWords.some(w => t.includes(w))) return;
+
     const list = this.getContinueWatching();
     const existingIndex = list.findIndex(i => String(i.id) === String(item.id));
     

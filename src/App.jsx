@@ -341,7 +341,7 @@ export default function App() {
                     {movieBoxCatalog?.indo_netflix?.length > 0 && (
                       <ContentRail
                         title="Film & Series Indonesia Terbaru di Netflix 🇮🇩"
-                        subtitle="Rilis film bioskop Indonesia resmi di Netflix (The Shadow Strays, Kabut Berduri, Agak Laen, Siksa Kubur)"
+                        subtitle="Rilis film bioskop Indonesia resmi di Netflix (The Big 4, Agak Laen, Qorin, Pengabdi Setan, Siksa Neraka, Dilan, dll)"
                         items={movieBoxCatalog.indo_netflix}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
@@ -724,7 +724,7 @@ export default function App() {
                         {movieBoxCatalog?.indo_netflix?.length > 0 && (
                           <ContentRail
                             title="Film & Series Indonesia Terbaru di Netflix 🇮🇩"
-                            subtitle="Rilis film bioskop Indonesia resmi di Netflix (The Shadow Strays, Kabut Berduri, Agak Laen, dll)"
+                            subtitle="Rilis film bioskop Indonesia resmi di Netflix (The Big 4, Agak Laen, Qorin, Pengabdi Setan, Siksa Neraka, Dilan, dll)"
                             items={movieBoxCatalog.indo_netflix}
                             onMovieClick={handleOpenDetail}
                             onPlayClick={handlePlayMovie}
@@ -737,7 +737,7 @@ export default function App() {
                         {movieBoxCatalog?.sinetron_series?.length > 0 && (
                           <ContentRail
                             title="Sinetron & Series Indonesia Populer"
-                            subtitle="Sinetron hits harian (Terikat Janji, Terbaik Itu Kamu, Cinta Yasmin, Naik Ranjang)"
+                            subtitle="Sinetron & Series hits lengkap (Sajadah Panjang 13 Eps, Live With My Ketos 6 Eps, Avatar 61 Eps, Money Heist Korea 9 Eps, dll)"
                             items={movieBoxCatalog.sinetron_series}
                             onMovieClick={handleOpenDetail}
                             onPlayClick={handlePlayMovie}

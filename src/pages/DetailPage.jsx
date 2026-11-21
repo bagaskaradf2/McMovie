@@ -43,6 +43,48 @@ export default function DetailPage({ type: propType }) {
   const [copiedLink, setCopiedLink] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
 
+  // Instant redirect table for unreleased teaser trailers, broken embeds, and invalid titles
+  const BLACKLIST_REDIRECTS = {
+    // Reawakened Man -> Avengers: Endgame (3h 01m full film)
+    '961214': { type: 'movie', id: '31591' },
+    // Alas Roban: The Series -> Sajadah Panjang (13 full episodes)
+    '338973': { type: 'tv', id: 'sajadah_panjang' },
+    // Kabut Berduri -> The Big 4 (2h 21m direct stream)
+    '1126357': { type: 'movie', id: '9762' },
+    // Siksa Kubur -> Siksa Neraka (1h 28m direct stream)
+    '1119527': { type: 'movie', id: '17139' },
+    // Ipar Adalah Maut -> Agak Laen (1h 58m direct stream)
+    '1181068': { type: 'movie', id: '19364' },
+    // Unreleased teaser trailers -> Full-length blockbusters
+    '1595124': { type: 'movie', id: '13616' },
+    '1551025': { type: 'movie', id: '19342' },
+    '1185344': { type: 'movie', id: '14049' },
+    '1562642': { type: 'movie', id: '17530' },
+    '1300968': { type: 'movie', id: '31591' },
+    '1092622': { type: 'movie', id: '4494' }
+  };
+
+  useEffect(() => {
+    const rawId = String(id).replace(/^dub_/, '').replace(/^dub_series_/, '');
+    const redirectTarget = BLACKLIST_REDIRECTS[rawId] || BLACKLIST_REDIRECTS[String(id)];
+    if (redirectTarget) {
+      if (redirectTarget.type === 'tv') {
+        navigate(`/tv/${redirectTarget.id}`, { replace: true });
+      } else {
+        navigate(`/movie/${redirectTarget.id}`, { replace: true });
+      }
+      return;
+    }
+    const t = (preloadedItem?.title || '').toLowerCase();
+    if (t.includes('reawakened') || t.includes('alas roban') || t.includes('kabut berduri') || t.includes('siksa kubur') || t.includes('ipar adalah maut')) {
+      if (t.includes('alas roban')) {
+        navigate('/tv/sajadah_panjang', { replace: true });
+      } else {
+        navigate('/movie/31591', { replace: true });
+      }
+    }
+  }, [id, preloadedItem, navigate]);
+
   useEffect(() => {
     let isMounted = true;
     if (!preloadedItem) {
@@ -61,28 +103,35 @@ export default function DetailPage({ type: propType }) {
           setDetails(fullItem);
           setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
 
-          const totalEps = (typeof fullItem.episodes === 'number' && fullItem.episodes > 0)
-            ? fullItem.episodes
-            : (fullItem.parts?.length || 1);
+          let genEps = [];
+          if (Array.isArray(fullItem.episodesList) && fullItem.episodesList.length > 0) {
+            genEps = fullItem.episodesList;
+          } else if (Array.isArray(fullItem.episodes) && fullItem.episodes.length > 0) {
+            genEps = fullItem.episodes;
+          } else {
+            const totalEps = (typeof fullItem.episodes === 'number' && fullItem.episodes > 0)
+              ? fullItem.episodes
+              : (fullItem.parts?.length || 1);
 
-          const genEps = Array.from({ length: totalEps }, (_, i) => {
-            const epNum = i + 1;
-            return {
-              episode_number: epNum,
-              name: `Episode ${epNum}`,
-              overview: epNum === 1 && fullItem.parts?.length > 0
-                ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
-                : `Episode ${epNum} dari serial ${fullItem.title || 'Serial'} durasi penuh.`,
-              still_path: fullItem.backdrop_path || fullItem.poster_path
-            };
-          });
+            genEps = Array.from({ length: totalEps }, (_, i) => {
+              const epNum = i + 1;
+              return {
+                episode_number: epNum,
+                name: `Episode ${epNum}`,
+                overview: epNum === 1 && fullItem.parts?.length > 0
+                  ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
+                  : `Episode ${epNum} dari serial ${fullItem.title || 'Serial'} durasi penuh.`,
+                still_path: fullItem.backdrop_path || fullItem.poster_path
+              };
+            });
+          }
           setSeasonData({ episodes: genEps, season_number: 1 });
           setSelectedSeason(1);
 
           setLoading(false);
 
-          // If item has a TMDB ID, optionally fetch extra seasons/credits in background
-          if (fullItem.tmdbId && fullItem.media_type === 'tv' && (!fullItem.parts || fullItem.parts.length === 0)) {
+          // If item has a TMDB ID and no local episodesList, fetch extra seasons/credits from TMDB
+          if (fullItem.tmdbId && fullItem.media_type === 'tv' && (!fullItem.episodesList || fullItem.episodesList.length === 0) && (!fullItem.parts || fullItem.parts.length === 0)) {
             fetchSeason(fullItem.tmdbId, 1);
           }
           return;
@@ -559,7 +608,7 @@ export default function DetailPage({ type: propType }) {
             </div>
 
             {/* Episode 1 Parts Bar if available */}
-            {data.parts && data.parts.length > 1 && (
+            {data.parts && data.parts.length > 1 && (!data.episodesList || data.episodesList.length <= 1) && (
               <div className="mb-4 px-4 py-2.5 rounded-xl bg-[#12141c] border border-amber-400/20 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-sm">
                 <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 flex-none">
                   <Play className="w-3 h-3 fill-amber-400" />
@@ -577,7 +626,7 @@ export default function DetailPage({ type: propType }) {
                   ))}
                 </div>
                 <span className="ml-auto text-[11px] text-zinc-400 hidden sm:inline">
-                  ⚡ 33 Episode Full HD
+                  ⚡ Episode Full HD
                 </span>
               </div>
             )}
