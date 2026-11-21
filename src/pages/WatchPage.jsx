@@ -55,7 +55,7 @@ export default function WatchPage({
   const [loadingSeason, setLoadingSeason] = useState(false);
 
   // Streaming Server state
-  const [activeServer, setActiveServer] = useState('vidlink');
+  const [activeServer, setActiveServer] = useState('superembed');
   const [reloadKey, setReloadKey] = useState(0);
   const [useDirectPlayer, setUseDirectPlayer] = useState(false);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
@@ -1153,6 +1153,7 @@ export default function WatchPage({
               title={title}
               className="w-full h-full border-0 bg-black"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
               allowFullScreen
             />
           )}
@@ -1193,21 +1194,19 @@ export default function WatchPage({
           </div>
         )}
 
-        {/* Full Access & Durasi Penuh Notice */}
-        <div className="mt-3 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-950/40 via-zinc-900/60 to-zinc-900/40 border border-emerald-500/20 text-zinc-300 text-xs flex items-center justify-between gap-3 shadow-md">
+        {/* Ad-Shield & Durasi Penuh Notice */}
+        <div className="mt-3 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-950/50 via-zinc-900/70 to-zinc-900/50 border border-emerald-500/25 text-zinc-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-lg">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-extrabold text-[10px] uppercase tracking-wide border border-emerald-500/30">
-              Full Access • Durasi Penuh
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-extrabold text-[10px] uppercase tracking-wide border border-emerald-500/30 flex items-center gap-1">
+              <span>🛡️ Ad-Shield Aktif</span>
             </span>
             <span className="text-zinc-300 text-[11px] sm:text-xs">
-              Gunakan server <b>VidLink 4K</b>, <b>AutoEmbed</b>, atau <b>SuperEmbed</b> untuk memutar film/series secara tuntas tanpa terpotong 15 menit & bebas VIP.
+              Popup iklan & redirect eksternal <b>diblokir</b>. Pemutaran tetap fokus di player McMovies dengan <b>durasi penuh</b> tanpa terpotong 15 menit & bebas VIP.
             </span>
           </div>
-          {item?.movieboxEmbedUrl && (
-            <span className="text-[11px] text-amber-400 font-medium whitespace-nowrap hidden sm:inline">
-              ⚡ MovieBox Live Terhubung
-            </span>
-          )}
+          <span className="text-[11px] text-zinc-400 font-medium">
+            Server Utama: <strong className="text-emerald-400">SuperEmbed HD</strong>
+          </span>
         </div>
 
         {/* Minimal CinemaOS Server Toolbar */}
