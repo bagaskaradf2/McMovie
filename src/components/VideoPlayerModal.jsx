@@ -27,7 +27,7 @@ export default function VideoPlayerModal({
 }) {
   const [currentSeason, setCurrentSeason] = useState(initialSeason);
   const [currentEpisode, setCurrentEpisode] = useState(initialEpisode);
-  const [activeServer, setActiveServer] = useState('vidlink');
+  const [activeServer, setActiveServer] = useState('anyembed');
   const [reloadKey, setReloadKey] = useState(0);
   const [useDirectPlayer, setUseDirectPlayer] = useState(false);
   const iframeRef = useRef(null);

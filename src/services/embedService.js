@@ -7,15 +7,27 @@
 
 export const STREAM_SERVERS = [
   {
-    id: 'superembed',
-    name: '🛡️ SuperEmbed HD (Ad-Shield)',
-    tag: 'FMHY Primary • Durasi Penuh • Film & TV Series Lengkap Bebas Iklan',
+    id: 'anyembed',
+    name: '🚀 AnyEmbed 4K (Anti-Buffer)',
+    tag: 'FMHY Primary • Film Indonesia & Box Office Lengkap Bebas Iklan',
     badge: 'Rekomendasi',
     getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
       if (mediaType === 'tv') {
-        return `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`;
+        return `https://anyembed.xyz/embed/tmdb-tv-${id}/${season}/${episode}`;
       }
-      return `https://multiembed.mov/?video_id=${id}&tmdb=1`;
+      return `https://anyembed.xyz/embed/tmdb-movie-${id}`;
+    }
+  },
+  {
+    id: 'vidsrc2',
+    name: '📡 VidSrc Global 4K',
+    tag: 'Multi-Region CDN Cepat • Film Indonesia & Mancanegara',
+    badge: '4K Ultra HD',
+    getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
+      if (mediaType === 'tv') {
+        return `https://vidsrc2.ru/embed/tv/${id}/${season}/${episode}`;
+      }
+      return `https://vidsrc2.ru/embed/movie/${id}`;
     }
   },
   {
@@ -31,8 +43,20 @@ export const STREAM_SERVERS = [
     }
   },
   {
+    id: 'superembed',
+    name: '🛡️ SuperEmbed HD (Ad-Shield)',
+    tag: 'FMHY Mirror • Film & TV Series Barat',
+    badge: 'Full HD',
+    getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
+      if (mediaType === 'tv') {
+        return `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${episode}`;
+      }
+      return `https://multiembed.mov/?video_id=${id}&tmdb=1`;
+    }
+  },
+  {
     id: 'autoembed',
-    name: '🚀 AutoEmbed Multi-Sub',
+    name: '🏎️ AutoEmbed Multi-Sub',
     tag: 'Subtitle Indonesia Otomatis • Full Movie Bebas VIP',
     badge: 'Full HD',
     getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
@@ -40,30 +64,6 @@ export const STREAM_SERVERS = [
         return `https://autoembed.me/tv/tmdb/${id}/${season}/${episode}`;
       }
       return `https://autoembed.me/movie/tmdb/${id}`;
-    }
-  },
-  {
-    id: 'smashystream',
-    name: '🏎️ SmashyStream HD',
-    tag: 'Alternatif Cepat Buffer Rendah',
-    badge: 'HD',
-    getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
-      if (mediaType === 'tv') {
-        return `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${season}&episode=${episode}`;
-      }
-      return `https://embed.smashystream.com/playere.php?tmdb=${id}`;
-    }
-  },
-  {
-    id: 'vidsrc_cc',
-    name: '📡 VidSrc VIP',
-    tag: 'High Bandwidth CDN Stream',
-    badge: '1080p',
-    getEmbedUrl: (id, mediaType = 'movie', season = 1, episode = 1) => {
-      if (mediaType === 'tv') {
-        return `https://vidsrc.cc/v2/embed/tv/${id}/${season}/${episode}`;
-      }
-      return `https://vidsrc.cc/v2/embed/movie/${id}`;
     }
   }
 ];

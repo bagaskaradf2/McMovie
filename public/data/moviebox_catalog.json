@@ -164,7 +164,8 @@
       "badge": "Disney+",
       "synopsis": "Saksikan tayangan Percy Jackson and the Olympians kualitas Full HD 1080p tanpa iklan.",
       "seasons": 3,
-      "episodes": 24
+      "episodes": 24,
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2023/08/10/30cd68688df186542cb904861f21e365-sd.mp4"
     },
     {
       "id": 318795,
@@ -338,8 +339,8 @@
       ]
     },
     {
-      "id": 205856,
-      "tmdbId": 205856,
+      "id": 228957,
+      "tmdbId": 228957,
       "title": "Gadis Kretek (Cigarette Girl)",
       "original_title": "God of War",
       "poster": "",
@@ -356,8 +357,8 @@
       "episodes": 2
     },
     {
-      "id": 252538,
-      "tmdbId": 252538,
+      "id": 228958,
+      "tmdbId": 228958,
       "title": "Joko Anwar's Nightmares and Daydreams",
       "original_title": "七年后回家吊打全村",
       "poster": "https://image.tmdb.org/t/p/w500/f0Sjo0aYHtrbbYI2r8uYvFglvaj.jpg",
@@ -515,8 +516,9 @@
       "year": "2026",
       "type": "movie",
       "media_type": "movie",
-      "badge": "Limited Free",
-      "synopsis": "Saksikan tayangan The Hunger Games: Sunrise on the Reaping kualitas Full HD 1080p tanpa iklan."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Saksikan tayangan The Hunger Games: Sunrise on the Reaping kualitas Full HD 1080p tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/07/04/f98bda876a6b8f8cdb907ea23643a10d-ld.mp4"
     },
     {
       "id": 1595124,
@@ -531,8 +533,9 @@
       "year": "2026",
       "type": "movie",
       "media_type": "movie",
-      "badge": "Limited Free",
-      "synopsis": "Saksikan tayangan Steps kualitas Full HD 1080p tanpa iklan."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Saksikan tayangan Steps kualitas Full HD 1080p tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/12/f86d99adfb2fe0d0f18e8aa72e7f0f02-ld.mp4"
     },
     {
       "id": 299534,
@@ -547,8 +550,9 @@
       "year": "2019",
       "type": "movie",
       "media_type": "movie",
-      "badge": "Blockbuster",
-      "synopsis": "Terdampar di luar angkasa tanpa persediaan makanan dan minuman, Tony Stark berusaha mengirim pesan untuk Pepper Potts dimana persediaan oksigen mulai menipis. Sementara itu para Avengers yang tersisa harus menemukan cara untuk mengembalikan 50% mahluk di seluruh dunia yang telah dilenyapkan oleh Thanos."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Terdampar di luar angkasa tanpa persediaan makanan dan minuman, Tony Stark berusaha mengirim pesan untuk Pepper Potts dimana persediaan oksigen mulai menipis. Sementara itu para Avengers yang tersisa harus menemukan cara untuk mengembalikan 50% mahluk di seluruh dunia yang telah dilenyapkan oleh Thanos.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/15/c80824d8a92b532e9bf2a7a540b38a60-ld.mp4"
     },
     {
       "id": 961214,
@@ -563,8 +567,9 @@
       "year": "2026",
       "type": "movie",
       "media_type": "movie",
-      "badge": "Action",
-      "synopsis": "Saksikan tayangan Reawakened Man kualitas Full HD 1080p tanpa iklan."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Saksikan tayangan Reawakened Man kualitas Full HD 1080p tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/09/d0f309a4f5890f95586a6eeb80260e86-ld.mp4"
     },
     {
       "id": 1551025,
@@ -579,8 +584,9 @@
       "year": "2026",
       "type": "movie",
       "media_type": "movie",
-      "badge": "Netflix",
-      "synopsis": "Saksikan tayangan Guarding Stars kualitas Full HD 1080p tanpa iklan."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Saksikan tayangan Guarding Stars kualitas Full HD 1080p tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/18/4dba94539f9e9b4d267262765260ca42-ld.mp4"
     },
     {
       "id": 1185344,
@@ -595,8 +601,9 @@
       "year": "2026",
       "type": "movie",
       "media_type": "movie",
-      "badge": "Thriller",
-      "synopsis": "Saksikan tayangan The Beast kualitas Full HD 1080p tanpa iklan."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Saksikan tayangan The Beast kualitas Full HD 1080p tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/10/09/fa5708f88c2c53ea9b17524449c5fcc5-ld.mp4"
     },
     {
       "id": 1153576,
@@ -627,8 +634,9 @@
       "year": "2026",
       "type": "movie",
       "media_type": "movie",
-      "badge": "War / Action",
-      "synopsis": "Saksikan tayangan Ghost Soldier kualitas Full HD 1080p tanpa iklan."
+      "badge": "Limited Free • Direct MP4",
+      "synopsis": "Saksikan tayangan Ghost Soldier kualitas Full HD 1080p tanpa iklan.",
+      "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/08/20/a98bf8e50b4231d2e8a6f5c29f5fb989-ld.mp4"
     },
     {
       "id": 533535,
@@ -701,164 +709,190 @@
       "tmdbId": 1151949,
       "title": "The Shadow Strays",
       "original_title": "The Shadow Strays",
-      "poster": "https://image.tmdb.org/t/p/w500/pwD9rQJimSaRuYoYdgwgacrNCOY.jpg",
-      "poster_path": "/pwD9rQJimSaRuYoYdgwgacrNCOY.jpg",
+      "poster": "https://image.tmdb.org/t/p/w500/7UYeDUzFIscGVr0mo7isvnrVYvO.jpg",
+      "poster_path": "/7UYeDUzFIscGVr0mo7isvnrVYvO.jpg",
       "backdrop": "https://image.tmdb.org/t/p/original/lkzBusEFoXTQnxFMEsYAZ1QwRqu.jpg",
       "backdrop_path": "/lkzBusEFoXTQnxFMEsYAZ1QwRqu.jpg",
       "rating": 7.3,
+      "vote_average": 7.3,
       "year": "2024",
+      "release_date": "2024-09-10",
       "type": "movie",
       "media_type": "movie",
       "badge": "Netflix #1 Global",
-      "synopsis": "Si pembunuh belia yang terampil menentang mentornya demi menyelamatkan bocah lelaki dari sindikat kejahatan kejam. Ia akan menghancurkan siapa pun yang menghalanginya."
+      "category": "Film Indonesia",
+      "synopsis": "Skilled in the art of killing, a young assassin defies her mentor to save a boy "
     },
     {
       "id": 1126357,
       "tmdbId": 1126357,
       "title": "Kabut Berduri (Borderless Fog)",
       "original_title": "Kabut Berduri",
-      "poster": "https://image.tmdb.org/t/p/w500/jS7bzVw3u7ydK0o5WwH9qIH2V8K.jpg",
-      "poster_path": "/jS7bzVw3u7ydK0o5WwH9qIH2V8K.jpg",
+      "poster": "https://image.tmdb.org/t/p/w500/z6uPuxzFJs7OyTPrl5V0XUITKj5.jpg",
+      "poster_path": "/z6uPuxzFJs7OyTPrl5V0XUITKj5.jpg",
       "backdrop": "https://image.tmdb.org/t/p/original/7w3lsubWU6UTOBgNqzQ4SPuXm8c.jpg",
       "backdrop_path": "/7w3lsubWU6UTOBgNqzQ4SPuXm8c.jpg",
       "rating": 6.2,
+      "vote_average": 6.2,
       "year": "2024",
+      "release_date": "2024-07-31",
       "type": "movie",
       "media_type": "movie",
       "badge": "Netflix Original",
-      "synopsis": "Seorang detektif kota besar menyelidiki serangkaian pembunuhan mengerikan di sepanjang perbatasan Indonesia-Malaysia—memaksanya menghadapi hantu-hantu masa lalunya."
+      "category": "Film Indonesia",
+      "synopsis": "A big-city detective investigates a series of gruesome murders along the Indones"
     },
     {
       "id": 1279914,
       "tmdbId": 1279914,
       "title": "Sekawan Limo",
       "original_title": "Sekawan Limo",
-      "poster": "https://image.tmdb.org/t/p/w500/4sYLSgUTwbudPu4GkU8LKWGXyRm.jpg",
-      "poster_path": "/4sYLSgUTwbudPu4GkU8LKWGXyRm.jpg",
+      "poster": "https://image.tmdb.org/t/p/w500/vDShtzKFKjXsFpQNbBY5ijSeLqF.jpg",
+      "poster_path": "/vDShtzKFKjXsFpQNbBY5ijSeLqF.jpg",
       "backdrop": "https://image.tmdb.org/t/p/original/ethGwemVpYCyxBbeeYuSLbd5Qzp.jpg",
       "backdrop_path": "/ethGwemVpYCyxBbeeYuSLbd5Qzp.jpg",
       "rating": 6.2,
+      "vote_average": 6.2,
       "year": "2024",
+      "release_date": "2024-07-04",
       "type": "movie",
       "media_type": "movie",
       "badge": "Horor Komedi",
-      "synopsis": "Dalam komedi horor unik ini, lima pendaki menjelajahi gunung. Menaati peringatan takhayul dengan bebas, mereka lantas menyadari bahwa salah satu dari mereka adalah hantu."
+      "category": "Film Indonesia",
+      "synopsis": "In this quirky horror comedy, five hikers explore a mountain, casually heeding s"
     },
     {
       "id": 1175161,
       "tmdbId": 1175161,
       "title": "Agak Laen",
       "original_title": "Agak Laen",
-      "poster": "https://image.tmdb.org/t/p/w500/QBxira0clJwdCRHu2O2rELU9J.jpg",
-      "poster_path": "/QBxira0clJwdCRHu2O2rELU9J.jpg",
+      "poster": "https://image.tmdb.org/t/p/w500/lUOwyPbDD9Agl3pHQVHGbZE0TvI.jpg",
+      "poster_path": "/lUOwyPbDD9Agl3pHQVHGbZE0TvI.jpg",
       "backdrop": "https://image.tmdb.org/t/p/original/aMD179LsRq3oyFeAUSjij3dDtRX.jpg",
       "backdrop_path": "/aMD179LsRq3oyFeAUSjij3dDtRX.jpg",
       "rating": 7.1,
+      "vote_average": 7.1,
       "year": "2024",
+      "release_date": "2024-02-01",
       "type": "movie",
       "media_type": "movie",
       "badge": "#1 Box Office 2024",
-      "synopsis": "Saksikan tayangan Agak Laen kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "Four friends, working in a haunted house ride at a night market, unintentionally"
     },
     {
       "id": 1119527,
       "tmdbId": 1119527,
       "title": "Siksa Kubur (Grave Torture)",
       "original_title": "Siksa Kubur",
-      "poster": "https://image.tmdb.org/t/p/w500/aBNkuQxJuWiaMjgXfyoVCJC9Blc.jpg",
-      "poster_path": "/aBNkuQxJuWiaMjgXfyoVCJC9Blc.jpg",
+      "poster": "https://image.tmdb.org/t/p/w500/sDaiRx3OWvCOo1vLoEpdedLeVzY.jpg",
+      "poster_path": "/sDaiRx3OWvCOo1vLoEpdedLeVzY.jpg",
       "backdrop": "https://image.tmdb.org/t/p/original/fTDCrqJ9uxXHP4F6gY9SUWN6Xsa.jpg",
       "backdrop_path": "/fTDCrqJ9uxXHP4F6gY9SUWN6Xsa.jpg",
       "rating": 6.6,
+      "vote_average": 6.6,
       "year": "2024",
+      "release_date": "2024-04-11",
       "type": "movie",
       "media_type": "movie",
       "badge": "Joko Anwar Horor",
-      "synopsis": "Setelah kedua orang tuanya jadi korban bom bunuh diri Sita jadi tidak percaya agama. Sejak saat itu tujuan hidup Sita hanya satu: mencari orang yang paling berdosa dan ketika orang itu meninggal Sita ingin ikut masuk ke dalam kuburannya untuk membuktikan bahwa siksa kubur tidak ada dan agama tidak nyata. Namun, tentunya ada konsekuensi yang mengerikan bagi mereka yang tak percaya."
+      "category": "Film Indonesia",
+      "synopsis": "When a violent act kills her parents, Sita vows to debunk the idea of supernatur"
     },
     {
-      "id": 1146200,
-      "tmdbId": 1146200,
+      "id": 1181068,
+      "tmdbId": 1181068,
       "title": "Ipar Adalah Maut",
-      "original_title": "超絶！！怖い心霊ビデオ 25話",
-      "poster": "https://image.tmdb.org/t/p/w500/1F5BPNbhxaWAA83YTnPjcswt7Nc.jpg",
-      "poster_path": "/1F5BPNbhxaWAA83YTnPjcswt7Nc.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/w500/1F5BPNbhxaWAA83YTnPjcswt7Nc.jpg",
-      "backdrop_path": "",
+      "original_title": "Ipar Adalah Maut",
+      "poster": "https://image.tmdb.org/t/p/w500/yBnfwE2aUXyZojWQNSYjBz62qzG.jpg",
+      "poster_path": "/yBnfwE2aUXyZojWQNSYjBz62qzG.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/p0nHE2iqzYRNbuLO54Ekp9m3BkS.jpg",
+      "backdrop_path": "/p0nHE2iqzYRNbuLO54Ekp9m3BkS.jpg",
       "rating": 8.2,
-      "year": "2016",
+      "vote_average": 8.2,
+      "year": "2024",
+      "release_date": "2024-06-13",
       "type": "movie",
       "media_type": "movie",
       "badge": "Drama Viral",
-      "synopsis": "Saksikan tayangan Ipar Adalah Maut kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "Aris was the perfect husband and ideal family man. That is, until his sister-in-"
     },
     {
-      "id": 1056360,
-      "tmdbId": 1056360,
+      "id": 1057663,
+      "tmdbId": 1057663,
       "title": "Budi Pekerti (Andragogy)",
-      "original_title": "American Fiction",
-      "poster": "https://image.tmdb.org/t/p/w500/57MFWGHarg9jid7yfDTka4RmcMU.jpg",
-      "poster_path": "/57MFWGHarg9jid7yfDTka4RmcMU.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/original/3mpgltEMgPf8zFtPnAWdDVN8ZT1.jpg",
-      "backdrop_path": "/3mpgltEMgPf8zFtPnAWdDVN8ZT1.jpg",
+      "original_title": "Budi Pekerti",
+      "poster": "https://image.tmdb.org/t/p/w500/9nRxHuA966OxNszQIskZPOSDZU8.jpg",
+      "poster_path": "/9nRxHuA966OxNszQIskZPOSDZU8.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/6DXziVYOFVzARM182ywxnledL1f.jpg",
+      "backdrop_path": "/6DXziVYOFVzARM182ywxnledL1f.jpg",
       "rating": 7.2,
+      "vote_average": 7.2,
       "year": "2023",
+      "release_date": "2023-11-02",
       "type": "movie",
       "media_type": "movie",
       "badge": "Festival Film",
-      "synopsis": "Seorang novelis yang muak dengan pendirian yang mendapat untung dari hiburan Hitam menggunakan nama pena untuk menulis buku yang mendorongnya ke jantung kemunafikan dan kegilaan yang dia klaim untuk dihina."
+      "category": "Film Indonesia",
+      "synopsis": "A schoolteacher's reputation is at risk when a video of her speaking up against "
     },
     {
       "id": 1223799,
       "tmdbId": 1223799,
       "title": "Pemandi Jenazah",
       "original_title": "Pemandi Jenazah",
-      "poster": "https://image.tmdb.org/t/p/w500/jNwAJVDAkVZCwg6PV7mPUaCP5az.jpg",
-      "poster_path": "/jNwAJVDAkVZCwg6PV7mPUaCP5az.jpg",
+      "poster": "https://image.tmdb.org/t/p/w500/1ZTrQWpuhxMr32uC1fQBRnkVYlf.jpg",
+      "poster_path": "/1ZTrQWpuhxMr32uC1fQBRnkVYlf.jpg",
       "backdrop": "https://image.tmdb.org/t/p/original/p96S6KlDD71BMhNGLqf7zvEVlCL.jpg",
       "backdrop_path": "/p96S6KlDD71BMhNGLqf7zvEVlCL.jpg",
       "rating": 6.5,
+      "vote_average": 6.5,
       "year": "2024",
+      "release_date": "2024-02-22",
       "type": "movie",
       "media_type": "movie",
       "badge": "Horor Bioskop",
-      "synopsis": "Saksikan tayangan Pemandi Jenazah kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "Lela, a mortician, finds something odd about the body of her mother who died sud"
     },
     {
-      "id": 205856,
-      "tmdbId": 205856,
+      "id": 228957,
+      "tmdbId": 228957,
       "title": "Gadis Kretek (Cigarette Girl)",
-      "original_title": "God of War",
-      "poster": "",
-      "poster_path": "",
-      "backdrop": "",
-      "backdrop_path": "",
+      "original_title": "Gadis Kretek",
+      "poster": "https://image.tmdb.org/t/p/w500/694BgfPfUAGBsZn9l9eiiumwXt7.jpg",
+      "poster_path": "/694BgfPfUAGBsZn9l9eiiumwXt7.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/3mTFPI4gRTrRKg28H1hHRnVRWFF.jpg",
+      "backdrop_path": "/3mTFPI4gRTrRKg28H1hHRnVRWFF.jpg",
       "rating": 8.2,
-      "year": "2024",
+      "vote_average": 8.2,
+      "year": "2023",
+      "release_date": "2023-11-02",
       "type": "series",
       "media_type": "tv",
       "badge": "Netflix Series",
-      "synopsis": "Saksikan tayangan Gadis Kretek (Cigarette Girl) kualitas Full HD 1080p tanpa iklan.",
-      "seasons": 1,
-      "episodes": 2
+      "category": "Series Indonesia",
+      "synopsis": "A gifted artisan's journey of love and self-discovery unfolds as she defies trad"
     },
     {
-      "id": 252538,
-      "tmdbId": 252538,
+      "id": 228958,
+      "tmdbId": 228958,
       "title": "Joko Anwar's Nightmares and Daydreams",
-      "original_title": "七年后回家吊打全村",
-      "poster": "https://image.tmdb.org/t/p/w500/f0Sjo0aYHtrbbYI2r8uYvFglvaj.jpg",
-      "poster_path": "/f0Sjo0aYHtrbbYI2r8uYvFglvaj.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/w500/f0Sjo0aYHtrbbYI2r8uYvFglvaj.jpg",
-      "backdrop_path": "",
+      "original_title": "Joko Anwar's Nightmares and Daydreams",
+      "poster": "https://image.tmdb.org/t/p/w500/kb9cpXUwts8FipiLol8ZwF7b3zS.jpg",
+      "poster_path": "/kb9cpXUwts8FipiLol8ZwF7b3zS.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/c89Kd2hX20GFcAtovRvZnxjvRW3.jpg",
+      "backdrop_path": "/c89Kd2hX20GFcAtovRvZnxjvRW3.jpg",
       "rating": 8.2,
+      "vote_average": 8.2,
       "year": "2024",
+      "release_date": "2024-06-14",
       "type": "series",
       "media_type": "tv",
       "badge": "Netflix Sci-Fi",
-      "synopsis": "Saksikan tayangan Joko Anwar's Nightmares and Daydreams kualitas Full HD 1080p tanpa iklan.",
-      "seasons": 1,
-      "episodes": 1
+      "category": "Series Indonesia",
+      "synopsis": "Tales of supernatural sci-fi phenomena unfold in this collection of seven mind-b"
     },
     {
       "id": 1092622,
@@ -870,123 +904,144 @@
       "backdrop": "https://image.tmdb.org/t/p/original/3hKlH4Z8eNJDQ01PYLCEySsJLlR.jpg",
       "backdrop_path": "/3hKlH4Z8eNJDQ01PYLCEySsJLlR.jpg",
       "rating": 7.8,
+      "vote_average": 7.8,
       "year": "2024",
+      "release_date": "2024-02-14",
       "type": "movie",
       "media_type": "movie",
       "badge": "Action Romance",
-      "synopsis": "Ali Topan, pemuda berjiwa bebas yang hidup di jalanan, menemukan arti cinta dan pengorbanan saat membela kebenaran."
+      "category": "Film Indonesia",
+      "synopsis": "Ali Topan who is a hooligan with a motorbike who always roams the streets. His m"
     },
     {
-      "id": 994108,
-      "tmdbId": 994108,
+      "id": 1013240,
+      "tmdbId": 1013240,
       "title": "24 Jam Bersama Gaspar",
-      "original_title": "All of Us Strangers",
-      "poster": "https://image.tmdb.org/t/p/w500/aviJMFZSnnCAsCVyJGaPNx4Ef3i.jpg",
-      "poster_path": "/aviJMFZSnnCAsCVyJGaPNx4Ef3i.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/original/8yjHiSuSEhzR916LcIecuQ8tETG.jpg",
-      "backdrop_path": "/8yjHiSuSEhzR916LcIecuQ8tETG.jpg",
+      "original_title": "24 Jam Bersama Gaspar",
+      "poster": "https://image.tmdb.org/t/p/w500/8jJKM0ZR3GQo6E3CUkMKKVa4S8B.jpg",
+      "poster_path": "/8jJKM0ZR3GQo6E3CUkMKKVa4S8B.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/oFS0DgInCdvYRwaPkl3BLpmIuq5.jpg",
+      "backdrop_path": "/oFS0DgInCdvYRwaPkl3BLpmIuq5.jpg",
       "rating": 7.4,
+      "vote_average": 7.4,
       "year": "2023",
+      "release_date": "2023-10-06",
       "type": "movie",
       "media_type": "movie",
       "badge": "Netflix Original",
-      "synopsis": "Saksikan tayangan 24 Jam Bersama Gaspar kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "With only 24 hours left to live, a private investigator follows a trail of confo"
     },
     {
-      "id": 1064010,
-      "tmdbId": 1064010,
+      "id": 1052865,
+      "tmdbId": 1052865,
       "title": "Sewu Dino",
-      "original_title": "Working Girls",
-      "poster": "https://image.tmdb.org/t/p/w500/oufXoTwd73co0Eb2BvCKcP8boCT.jpg",
-      "poster_path": "/oufXoTwd73co0Eb2BvCKcP8boCT.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/original/osfvtKILPFAJStlTf7kDWGOwsBs.jpg",
-      "backdrop_path": "/osfvtKILPFAJStlTf7kDWGOwsBs.jpg",
+      "original_title": "Sewu Dino",
+      "poster": "https://image.tmdb.org/t/p/w500/mLH6xpgaxWskGaWlhTILIUwjrVm.jpg",
+      "poster_path": "/mLH6xpgaxWskGaWlhTILIUwjrVm.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/tDcCX1rSJZomkMKi8CfwcZUy0Tx.jpg",
+      "backdrop_path": "/tDcCX1rSJZomkMKi8CfwcZUy0Tx.jpg",
       "rating": 8.2,
-      "year": "2022",
+      "vote_average": 8.2,
+      "year": "2023",
+      "release_date": "2023-04-19",
       "type": "movie",
       "media_type": "movie",
       "badge": "Horor MD Pictures",
-      "synopsis": "Saksikan tayangan Sewu Dino kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "Sri accepts a generous job offer and tasked to perform a cleansing ritual for De"
     },
     {
-      "id": 1238466,
-      "tmdbId": 1238466,
+      "id": 1176166,
+      "tmdbId": 1176166,
       "title": "Badarawuhi di Desa Penari",
-      "original_title": "Powerful",
-      "poster": "",
-      "poster_path": "",
-      "backdrop": "",
-      "backdrop_path": "",
+      "original_title": "Badarawuhi di Desa Penari",
+      "poster": "https://image.tmdb.org/t/p/w500/A4kY5RKiPJ0sRknU4NojItr93Jr.jpg",
+      "poster_path": "/A4kY5RKiPJ0sRknU4NojItr93Jr.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/3g5gCox9WTtKFYaSmtOXdtxYC8P.jpg",
+      "backdrop_path": "/3g5gCox9WTtKFYaSmtOXdtxYC8P.jpg",
       "rating": 8.2,
-      "year": "2018",
+      "vote_average": 8.2,
+      "year": "2024",
+      "release_date": "2024-04-11",
       "type": "movie",
       "media_type": "movie",
       "badge": "KKN Universe",
-      "synopsis": "Saksikan tayangan Badarawuhi di Desa Penari kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "Mila must return a mystical bracelet to the \"Dancing Village,\" unaware that Bada"
     },
     {
-      "id": 1279822,
-      "tmdbId": 1279822,
+      "id": 1148817,
+      "tmdbId": 1148817,
       "title": "Vina: Sebelum 7 Hari",
-      "original_title": "Legend of the Lost Dragon",
-      "poster": "",
-      "poster_path": "",
-      "backdrop": "",
-      "backdrop_path": "",
+      "original_title": "Vina: Sebelum 7 Hari",
+      "poster": "https://image.tmdb.org/t/p/w500/mnzd3IhncseLyGJ31qwyTCCg3AM.jpg",
+      "poster_path": "/mnzd3IhncseLyGJ31qwyTCCg3AM.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/1V3nxNu6xwxOFQdMsCM699OsJCK.jpg",
+      "backdrop_path": "/1V3nxNu6xwxOFQdMsCM699OsJCK.jpg",
       "rating": 8.2,
-      "year": "1990",
+      "vote_average": 8.2,
+      "year": "2024",
+      "release_date": "2024-05-08",
       "type": "movie",
       "media_type": "movie",
       "badge": "Kisah Nyata",
-      "synopsis": "Saksikan tayangan Vina: Sebelum 7 Hari kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "A victim of catastrophic violence by motorbike gang members in Cirebon, Vina doe"
     },
     {
-      "id": 1242898,
-      "tmdbId": 1242898,
+      "id": 1254864,
+      "tmdbId": 1254864,
       "title": "Dua Hati Biru",
-      "original_title": "Predator: Badlands",
-      "poster": "https://image.tmdb.org/t/p/w500/pHpq9yNUIo6aDoCXEBzjSolywgz.jpg",
-      "poster_path": "/pHpq9yNUIo6aDoCXEBzjSolywgz.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/original/82lM4GJ9uuNvNDOEpxFy77uv4Ak.jpg",
-      "backdrop_path": "/82lM4GJ9uuNvNDOEpxFy77uv4Ak.jpg",
+      "original_title": "Dua Hati Biru",
+      "poster": "https://image.tmdb.org/t/p/w500/5dwcSo1zAZPeod0HQyATOEIsNrP.jpg",
+      "poster_path": "/5dwcSo1zAZPeod0HQyATOEIsNrP.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/vrn8DcBqq2cwIcTLpKtX9ExyL4D.jpg",
+      "backdrop_path": "/vrn8DcBqq2cwIcTLpKtX9ExyL4D.jpg",
       "rating": 7.8,
-      "year": "2025",
+      "vote_average": 7.8,
+      "year": "2024",
+      "release_date": "2024-04-17",
       "type": "movie",
       "media_type": "movie",
       "badge": "Drama Keluarga",
-      "synopsis": "Seorang Predator muda yang terbuang dari klannya menemukan sekutu yang tidak mungkin dalam perjalanannya mencari musuh utama."
+      "category": "Film Indonesia",
+      "synopsis": "Reunited after years apart, a young couple faces a new chapter of parenthood as "
     },
     {
-      "id": 1058694,
-      "tmdbId": 1058694,
+      "id": 739303,
+      "tmdbId": 739303,
       "title": "Petualangan Sherina 2",
-      "original_title": "Radical",
-      "poster": "https://image.tmdb.org/t/p/w500/eSatbygYZp8ooprBHZdb6GFZxGB.jpg",
-      "poster_path": "/eSatbygYZp8ooprBHZdb6GFZxGB.jpg",
-      "backdrop": "https://image.tmdb.org/t/p/original/gutU32BiBxJvJdzLv5RWC9hQhNh.jpg",
-      "backdrop_path": "/gutU32BiBxJvJdzLv5RWC9hQhNh.jpg",
+      "original_title": "Petualangan Sherina 2",
+      "poster": "https://image.tmdb.org/t/p/w500/1whriJjmbFWVFkO3aVZ3hcJQ5g7.jpg",
+      "poster_path": "/1whriJjmbFWVFkO3aVZ3hcJQ5g7.jpg",
+      "backdrop": "https://image.tmdb.org/t/p/original/v6SAgKv1nO7PRzUUFQz31KVkuUi.jpg",
+      "backdrop_path": "/v6SAgKv1nO7PRzUUFQz31KVkuUi.jpg",
       "rating": 8.3,
+      "vote_average": 8.3,
       "year": "2023",
+      "release_date": "2023-09-28",
       "type": "movie",
       "media_type": "movie",
       "badge": "Petualangan",
-      "synopsis": "Saksikan tayangan Petualangan Sherina 2 kualitas Full HD 1080p tanpa iklan."
+      "category": "Film Indonesia",
+      "synopsis": "Sherina is now an adult and works as a journalist. While Sadam is no longer Mami"
     },
     {
-      "id": 211075,
-      "tmdbId": 211075,
+      "id": 210964,
+      "tmdbId": 210964,
       "title": "Keluarga Cemara: The Series",
       "original_title": "京の絶景",
-      "poster": "",
+      "poster": "https://image.tmdb.org/t/p/w500/1TOpO3cDboRdYblw92b4duth7SE.jpg",
       "poster_path": "",
-      "backdrop": "",
+      "backdrop": "https://image.tmdb.org/t/p/original/yIRKBou2uj9Oig58PwCV4XXJeql.jpg",
       "backdrop_path": "",
       "rating": 8.2,
       "year": "2022",
       "type": "series",
       "media_type": "tv",
       "badge": "Series Keluarga",
-      "synopsis": "Saksikan tayangan Keluarga Cemara: The Series kualitas Full HD 1080p tanpa iklan.",
+      "synopsis": "Five teenagers with different personalities are put together in a team to take part in a national quiz competition.",
       "seasons": 1,
       "episodes": 5
     }
@@ -1306,9 +1361,21 @@
       "episodes": 30,
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
       "parts": [
-        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
-        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
-        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
       ]
     },
     {
@@ -1330,9 +1397,21 @@
       "episodes": 50,
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
       "parts": [
-        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
-        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
-        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
       ]
     },
     {
@@ -1354,9 +1433,21 @@
       "episodes": 16,
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
       "parts": [
-        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
-        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
-        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
       ]
     },
     {
@@ -1378,9 +1469,21 @@
       "episodes": 20,
       "streamUrl": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4",
       "parts": [
-        { "part": 1, "name": "Episode 1 Part 1", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4" },
-        { "part": 2, "name": "Episode 1 Part 2", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4" },
-        { "part": 3, "name": "Episode 1 Part 3", "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4" }
+        {
+          "part": 1,
+          "name": "Episode 1 Part 1",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/4b50f60471fdda9496121e39c596adfd-ld.mp4"
+        },
+        {
+          "part": 2,
+          "name": "Episode 1 Part 2",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/71dfc86aee5143aa3590afd17e9f56dc-ld.mp4"
+        },
+        {
+          "part": 3,
+          "name": "Episode 1 Part 3",
+          "url": "https://macdn.aoneroom.com/media/vone/2026/11/19/8cc8fc41f7b6e8fc0ada0373f2ca859a-ld.mp4"
+        }
       ]
     },
     {

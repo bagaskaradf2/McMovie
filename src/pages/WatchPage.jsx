@@ -81,9 +81,9 @@ export default function WatchPage({
   const [seasonData, setSeasonData] = useState(initialSeasonData);
   const [loadingSeason, setLoadingSeason] = useState(false);
 
-  // Streaming Server state: default to moviebox_direct if direct stream exists
+  // Streaming Server state: default to moviebox_direct if direct stream exists, or anyembed
   const [activeServer, setActiveServer] = useState(
-    hasDirect ? (preloadedItem?.isDubIndo ? 'dub_direct' : 'moviebox_direct') : 'superembed'
+    hasDirect ? (preloadedItem?.isDubIndo ? 'dub_direct' : 'moviebox_direct') : 'anyembed'
   );
   const [reloadKey, setReloadKey] = useState(0);
   const [useDirectPlayer, setUseDirectPlayer] = useState(hasDirect);
@@ -216,9 +216,6 @@ export default function WatchPage({
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     const settings = StorageService.getSettings();
-    if (settings.preferredServer) {
-      setActiveServer(settings.preferredServer);
-    }
 
     async function loadItem() {
       // 1. FAST PATH: Check MovieBox & Local Scraped Catalog FIRST (Instant local cache)
@@ -232,6 +229,10 @@ export default function WatchPage({
           if (finalItem.streamUrl || (finalItem.parts && finalItem.parts.length > 0)) {
             setUseDirectPlayer(true);
             setActiveServer('moviebox_direct');
+          } else if (settings.preferredServer) {
+            setActiveServer(settings.preferredServer);
+          } else {
+            setActiveServer('anyembed');
           }
 
           const totalEps = (typeof finalItem.episodes === 'number' && finalItem.episodes > 0)
@@ -256,7 +257,7 @@ export default function WatchPage({
           StorageService.updateProgress(finalItem, {
             season: currentSeason,
             episode: currentEpisode,
-            serverId: finalItem.streamUrl ? 'moviebox_direct' : (settings.preferredServer || 'superembed'),
+            serverId: finalItem.streamUrl ? 'moviebox_direct' : (settings.preferredServer || 'anyembed'),
           });
 
           // If local item has a TMDB ID, optionally fetch seasons/cast in background
@@ -802,7 +803,9 @@ export default function WatchPage({
       const matchedPart = item.parts.find(p => p.part === selectedPart) || item.parts[0];
       currentDirectStream = matchedPart?.url || item.streamUrl;
     } else {
-      currentDirectStream = item.streamUrl;
+      const partIdx = (currentEpisode - 1) % item.parts.length;
+      const matchedPart = item.parts[partIdx] || item.parts[0];
+      currentDirectStream = matchedPart?.url || item.streamUrl;
     }
   }
 
@@ -820,7 +823,9 @@ export default function WatchPage({
         const matchedPart = item.parts.find(p => p.part === selectedPart) || item.parts[0];
         currentDirectStream = matchedPart?.url || item?.streamUrl;
       } else {
-        currentDirectStream = item?.streamUrl;
+        const partIdx = (currentEpisode - 1) % item.parts.length;
+        const matchedPart = item.parts[partIdx] || item.parts[0];
+        currentDirectStream = matchedPart?.url || item?.streamUrl;
       }
     } else {
       currentDirectStream = item?.streamUrl;
@@ -1333,7 +1338,7 @@ export default function WatchPage({
             </span>
           </div>
           <span className="text-[11px] text-zinc-400 font-medium">
-            Server Utama: <strong className="text-emerald-400">SuperEmbed HD</strong>
+            Server Utama: <strong className="text-emerald-400">{availableServers.find(s => s.id === activeServer)?.name || (useDirectPlayer ? 'MovieBox Direct HD' : 'AnyEmbed 4K')}</strong>
           </span>
         </div>
 

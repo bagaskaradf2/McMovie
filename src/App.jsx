@@ -762,16 +762,21 @@ export default function App() {
                           <MovieCard
                             key={item.id || idx}
                             item={{
+                              ...item,
                               id: item.id || idx,
                               tmdbId: item.tmdbId,
                               title: item.title || item.name || 'MovieBox Title',
                               poster_path: item.poster || item.poster_path || item.thumbnail || item.cover,
                               vote_average: item.rating ? parseFloat(item.rating) : 8.0,
                               release_date: item.year || '',
-                              media_type: item.type === 'series' ? 'tv' : 'movie',
+                              media_type: (item.type === 'series' || item.media_type === 'tv') ? 'tv' : 'movie',
                               overview: item.synopsis || item.description || '',
                               badge: item.badge,
                               category: item.category,
+                              streamUrl: item.streamUrl,
+                              parts: item.parts,
+                              subjectId: item.subjectId,
+                              episodes: item.episodes
                             }}
                             className="w-full"
                             onClick={handleOpenDetail}

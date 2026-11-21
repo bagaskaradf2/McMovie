@@ -225,11 +225,11 @@ export default function DetailPage({ type: propType }) {
   const handlePlayDirect = (season = 1, episode = 1) => {
     if (!item) return;
     if (item.isDubIndo) {
-      navigate(`/watch/dub/${item.id}`);
+      navigate(`/watch/dub/${item.id}`, { state: { item } });
     } else if (isSeries) {
-      navigate(`/watch/tv/${item.id}/${season}/${episode}`);
+      navigate(`/watch/tv/${item.id}/${season}/${episode}`, { state: { item } });
     } else {
-      navigate(`/watch/movie/${item.id}`);
+      navigate(`/watch/movie/${item.id}`, { state: { item } });
     }
   };
 
