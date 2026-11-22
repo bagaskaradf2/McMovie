@@ -37,6 +37,7 @@ import { STREAM_SERVERS, getEmbedUrl } from '../services/embedService';
 import { TmdbService } from '../services/tmdbService';
 import { DubIndoService } from '../services/dubIndoService';
 import { MovieBoxService } from '../services/movieBoxService';
+import { CloudXService } from '../services/cloudXService';
 import { StorageService } from '../services/storageService';
 import MovieCard from '../components/MovieCard';
 
@@ -48,48 +49,6 @@ export default function WatchPage({
   preloadedItem
 }) {
   const navigate = useNavigate();
-
-  // Instant redirect table for unreleased teaser trailers, broken embeds, and invalid titles
-  const BLACKLIST_REDIRECTS = {
-    // Reawakened Man -> Avengers: Endgame (3h 01m full blockbuster)
-    '961214': { type: 'movie', id: '31591' },
-    // Alas Roban: The Series -> Sajadah Panjang (13 full episodes)
-    '338973': { type: 'tv', id: 'sajadah_panjang', s: 1, e: 1 },
-    // Kabut Berduri -> The Big 4 (2h 21m direct stream)
-    '1126357': { type: 'movie', id: '9762' },
-    // Siksa Kubur -> Siksa Neraka (1h 28m direct stream)
-    '1119527': { type: 'movie', id: '17139' },
-    // Ipar Adalah Maut -> Agak Laen (1h 58m direct stream)
-    '1181068': { type: 'movie', id: '19364' },
-    // Unreleased teaser trailers -> Full-length blockbusters
-    '1595124': { type: 'movie', id: '13616' },
-    '1551025': { type: 'movie', id: '19342' },
-    '1185344': { type: 'movie', id: '14049' },
-    '1562642': { type: 'movie', id: '17530' },
-    '1300968': { type: 'movie', id: '31591' },
-    '1092622': { type: 'movie', id: '4494' }
-  };
-
-  useEffect(() => {
-    const rawId = String(propId).replace(/^dub_/, '').replace(/^dub_series_/, '');
-    const redirectTarget = BLACKLIST_REDIRECTS[rawId] || BLACKLIST_REDIRECTS[String(propId)];
-    if (redirectTarget) {
-      if (redirectTarget.type === 'tv') {
-        navigate(`/watch/tv/${redirectTarget.id}/${redirectTarget.s || 1}/${redirectTarget.e || 1}`, { replace: true });
-      } else {
-        navigate(`/watch/movie/${redirectTarget.id}`, { replace: true });
-      }
-      return;
-    }
-    const t = (preloadedItem?.title || '').toLowerCase();
-    if (t.includes('reawakened') || t.includes('alas roban') || t.includes('kabut berduri') || t.includes('siksa kubur') || t.includes('ipar adalah maut')) {
-      if (t.includes('alas roban')) {
-        navigate('/watch/tv/sajadah_panjang/1/1', { replace: true });
-      } else {
-        navigate('/watch/movie/31591', { replace: true });
-      }
-    }
-  }, [propId, preloadedItem, navigate]);
 
   const hasDirect = Boolean(
     preloadedItem?.streamUrl ||
@@ -131,12 +90,21 @@ export default function WatchPage({
   const [seasonData, setSeasonData] = useState(initialSeasonData);
   const [loadingSeason, setLoadingSeason] = useState(false);
 
-  // Streaming Server state: default to moviebox_direct (CinemaOS native player) for 100% ad-free playback
+  // Streaming Server state: default to direct player if item has genuine direct stream, otherwise AnyEmbed 4K
+  const hasInitialDirect = Boolean(
+    preloadedItem?.streamUrl ||
+    (Array.isArray(preloadedItem?.episodesList) && preloadedItem.episodesList.some(e => e.streamUrl)) ||
+    (Array.isArray(preloadedItem?.episodes) && preloadedItem.episodes.some(e => e.streamUrl)) ||
+    preloadedItem?.isDubIndo
+  );
+
   const [activeServer, setActiveServer] = useState(
-    preloadedItem?.isDubIndo ? 'dub_direct' : 'moviebox_direct'
+    preloadedItem?.isDubIndo
+      ? 'dub_direct'
+      : (hasInitialDirect ? 'moviebox_direct' : 'anyembed')
   );
   const [reloadKey, setReloadKey] = useState(0);
-  const [useDirectPlayer, setUseDirectPlayer] = useState(true);
+  const [useDirectPlayer, setUseDirectPlayer] = useState(hasInitialDirect);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -332,6 +300,27 @@ export default function WatchPage({
         console.warn('Fast path local catalog lookup error:', e);
       }
 
+      // 1.5. CLOUDX PROVIDER FAST PATH (KlikXXI, Idlix, LK21, Ngefilm, Pusatfilm, Sflix)
+      try {
+        const cloudxItem = await CloudXService.getDetail(propId);
+        if (cloudxItem && isMounted) {
+          const finalItem = { ...cloudxItem, media_type: cloudxItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
+          setItem(finalItem);
+          setIsWatchlisted(StorageService.isWatchlisted(finalItem.id));
+          if (finalItem.streamUrl) {
+            setUseDirectPlayer(true);
+            setActiveServer('moviebox_direct');
+          } else {
+            setUseDirectPlayer(false);
+            setActiveServer('anyembed');
+          }
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('CloudX watch lookup error:', e);
+      }
+
       // 2. DUB INDO PATH
       if (type === 'dub') {
         const rawId = String(propId).replace(/^dub_/, '').replace(/^dub_series_/, '');
@@ -420,10 +409,9 @@ export default function WatchPage({
                 setUseDirectPlayer(true);
                 setActiveServer('moviebox_direct');
               } else {
-                // Ensure CinemaOS direct player always has a reliable full-length stream
-                fullItem.streamUrl = 'https://stream.dubbindo.site/upload/videos/2026/08/l8rXCBzpdqB2VCoLPMAW_18_52806307a558753e7bffe9af3dd8dd46_video_720p_converted.mp4';
-                setUseDirectPlayer(true);
-                setActiveServer('moviebox_direct');
+                // For TMDB movies without direct local MP4, use AnyEmbed 4K primary server (Anti-Buffer & Full Duration)
+                setUseDirectPlayer(false);
+                setActiveServer('anyembed');
               }
             }
 

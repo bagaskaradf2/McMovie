@@ -35,6 +35,7 @@ import { MovieWatchRoute, TvWatchRoute, DubWatchRoute } from './pages/WatchRoute
 import { TmdbService } from './services/tmdbService';
 import { DubIndoService } from './services/dubIndoService';
 import { MovieBoxService } from './services/movieBoxService';
+import { CloudXService } from './services/cloudXService';
 import { StorageService } from './services/storageService';
 
 const GENRES = [
@@ -72,6 +73,7 @@ export default function App() {
   const [movieBoxCatalog, setMovieBoxCatalog] = useState(null);
   const [movieBoxSubFilter, setMovieBoxSubFilter] = useState('all');
   const [movieBoxLoading, setMovieBoxLoading] = useState(false);
+  const [cloudXData, setCloudXData] = useState([]);
 
   // Tab specific data
   const [selectedGenre, setSelectedGenre] = useState(null);
@@ -140,6 +142,11 @@ export default function App() {
       .then((items) => setDubIndoSeries(items))
       .catch((e) => console.error('Dub Indo series err:', e));
 
+    // 4. Fetch CloudX Catalog (KlikXXI, Idlix, LK21, Ngefilm, Pusatfilm, Sflix)
+    CloudXService.getCatalog()
+      .then((items) => setCloudXData(items || []))
+      .catch((e) => console.error('CloudX catalog err:', e));
+
     // Global keyboard listener for search (Ctrl+K or Cmd+K)
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -184,6 +191,56 @@ export default function App() {
       });
     }
   }, [movieBoxCatalog]);
+
+  // Sequential Cross-Rail Deduplication: Ensures ZERO duplicate titles appear on the entire Home page
+  const deduplicatedHomeRails = React.useMemo(() => {
+    const seen = new Set();
+    const normalizeKey = (item) => {
+      if (!item) return { title: '', id: '' };
+      const title = (item.title || item.name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const id = String(item.tmdbId || item.id || '');
+      return { title, id };
+    };
+
+    const filterUnique = (list) => {
+      if (!Array.isArray(list)) return [];
+      const result = [];
+      for (const item of list) {
+        if (!item) continue;
+        const { title, id } = normalizeKey(item);
+        if (title && seen.has(`t:${title}`)) continue;
+        if (id && seen.has(`i:${id}`)) continue;
+
+        if (title) seen.add(`t:${title}`);
+        if (id) seen.add(`i:${id}`);
+        result.push(item);
+      }
+      return result;
+    };
+
+    // Sequential rail order: highest priority rails retain their movies
+    const cleanTrending = filterUnique(trending);
+    const cleanDubIndo = filterUnique(dubIndoMovies);
+    const cleanNetflixIndo = filterUnique(movieBoxCatalog?.indo_netflix || []);
+    const cleanCloudXIndo = filterUnique(cloudXData.filter(i => i.isIndo));
+    const cleanPopularMovies = filterUnique(popularMovies);
+    const cleanPopularTV = filterUnique(popularTV);
+    const cleanAnime = filterUnique(animeList);
+    const cleanKDrama = filterUnique(kdramaList);
+    const cleanTopRated = filterUnique(topRatedMovies);
+
+    return {
+      trending: cleanTrending,
+      dubIndo: cleanDubIndo,
+      netflixIndo: cleanNetflixIndo,
+      cloudXIndo: cleanCloudXIndo,
+      popularMovies: cleanPopularMovies,
+      popularTV: cleanPopularTV,
+      animeList: cleanAnime,
+      kdramaList: cleanKDrama,
+      topRatedMovies: cleanTopRated
+    };
+  }, [trending, dubIndoMovies, movieBoxCatalog, cloudXData, popularMovies, popularTV, animeList, kdramaList, topRatedMovies]);
 
   // Watchlist handlers
   const handleToggleWatchlist = (item) => {
@@ -319,7 +376,7 @@ export default function App() {
                     <ContentRail
                       title="Trending Hari Ini"
                       subtitle="Paling banyak ditonton di seluruh dunia 24 jam terakhir"
-                      items={trending}
+                      items={deduplicatedHomeRails.trending}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}
@@ -329,7 +386,7 @@ export default function App() {
                     <ContentRail
                       title="Top Videos Dubbing Indonesia"
                       subtitle="Koleksi film bioskop terpopuler dubbing Bahasa Indonesia resmi (Full Duration)"
-                      items={dubIndoMovies}
+                      items={deduplicatedHomeRails.dubIndo}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}
@@ -338,11 +395,11 @@ export default function App() {
                     />
 
                     {/* Film & Series Indonesia Terbaru di Netflix 🇮🇩 */}
-                    {movieBoxCatalog?.indo_netflix?.length > 0 && (
+                    {deduplicatedHomeRails.netflixIndo?.length > 0 && (
                       <ContentRail
                         title="Film & Series Indonesia Terbaru di Netflix 🇮🇩"
                         subtitle="Rilis film bioskop Indonesia resmi di Netflix (The Big 4, Agak Laen, Qorin, Pengabdi Setan, Siksa Neraka, Dilan, dll)"
-                        items={movieBoxCatalog.indo_netflix}
+                        items={deduplicatedHomeRails.netflixIndo}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
                         watchlistIds={watchlistIds}
@@ -354,10 +411,23 @@ export default function App() {
                       />
                     )}
 
+                    {/* Film Bioskop Indonesia & Box Office (CloudX) 🍿 */}
+                    {deduplicatedHomeRails.cloudXIndo?.length > 0 && (
+                      <ContentRail
+                        title="Film Bioskop Indonesia & Box Office (CloudX) 🍿"
+                        subtitle="Koleksi lengkap dari KlikXXI, LK21, Ngefilm, dan PusatFilm (Kabut Berduri, Siksa Kubur, Ipar Adalah Maut, Sekawan Limo, dll)"
+                        items={deduplicatedHomeRails.cloudXIndo}
+                        onMovieClick={handleOpenDetail}
+                        onPlayClick={handlePlayMovie}
+                        watchlistIds={watchlistIds}
+                        onToggleWatchlist={handleToggleWatchlist}
+                      />
+                    )}
+
                     <ContentRail
                       title="Film Bioskop Terpopuler"
                       subtitle="Film layar lebar terlaris & rilis bioskop global minggu ini"
-                      items={popularMovies}
+                      items={deduplicatedHomeRails.popularMovies}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}
@@ -368,7 +438,7 @@ export default function App() {
                     <ContentRail
                       title="Serial TV & Web Series"
                       subtitle="Musim lengkap dari Netflix, HBO, Disney+, dan AMC"
-                      items={popularTV}
+                      items={deduplicatedHomeRails.popularTV}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}
@@ -379,7 +449,7 @@ export default function App() {
                     <ContentRail
                       title="Anime Hits & Simulcast Jepang"
                       subtitle="Serial anime terpopuler dan episode terbaru dengan Sub & Dub"
-                      items={animeList}
+                      items={deduplicatedHomeRails.animeList}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}
@@ -390,7 +460,7 @@ export default function App() {
                     <ContentRail
                       title="Drama Korea & Drama Asia"
                       subtitle="K-Drama romantis, thriller misteri, dan serial Mandarin terpopuler"
-                      items={kdramaList}
+                      items={deduplicatedHomeRails.kdramaList}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}
@@ -401,7 +471,7 @@ export default function App() {
                     <ContentRail
                       title="Film Rating Tertinggi"
                       subtitle="Karya sinema terbaik sepanjang masa pilihan penonton dunia"
-                      items={topRatedMovies}
+                      items={deduplicatedHomeRails.topRatedMovies}
                       onMovieClick={handleOpenDetail}
                       onPlayClick={handlePlayMovie}
                       watchlistIds={watchlistIds}

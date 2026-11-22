@@ -21,6 +21,7 @@ import {
 import { TmdbService } from '../services/tmdbService';
 import { DubIndoService } from '../services/dubIndoService';
 import { MovieBoxService } from '../services/movieBoxService';
+import { CloudXService } from '../services/cloudXService';
 import { StorageService } from '../services/storageService';
 import MovieCard from '../components/MovieCard';
 
@@ -42,48 +43,6 @@ export default function DetailPage({ type: propType }) {
   const [isWatchlisted, setIsWatchlisted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
-
-  // Instant redirect table for unreleased teaser trailers, broken embeds, and invalid titles
-  const BLACKLIST_REDIRECTS = {
-    // Reawakened Man -> Avengers: Endgame (3h 01m full film)
-    '961214': { type: 'movie', id: '31591' },
-    // Alas Roban: The Series -> Sajadah Panjang (13 full episodes)
-    '338973': { type: 'tv', id: 'sajadah_panjang' },
-    // Kabut Berduri -> The Big 4 (2h 21m direct stream)
-    '1126357': { type: 'movie', id: '9762' },
-    // Siksa Kubur -> Siksa Neraka (1h 28m direct stream)
-    '1119527': { type: 'movie', id: '17139' },
-    // Ipar Adalah Maut -> Agak Laen (1h 58m direct stream)
-    '1181068': { type: 'movie', id: '19364' },
-    // Unreleased teaser trailers -> Full-length blockbusters
-    '1595124': { type: 'movie', id: '13616' },
-    '1551025': { type: 'movie', id: '19342' },
-    '1185344': { type: 'movie', id: '14049' },
-    '1562642': { type: 'movie', id: '17530' },
-    '1300968': { type: 'movie', id: '31591' },
-    '1092622': { type: 'movie', id: '4494' }
-  };
-
-  useEffect(() => {
-    const rawId = String(id).replace(/^dub_/, '').replace(/^dub_series_/, '');
-    const redirectTarget = BLACKLIST_REDIRECTS[rawId] || BLACKLIST_REDIRECTS[String(id)];
-    if (redirectTarget) {
-      if (redirectTarget.type === 'tv') {
-        navigate(`/tv/${redirectTarget.id}`, { replace: true });
-      } else {
-        navigate(`/movie/${redirectTarget.id}`, { replace: true });
-      }
-      return;
-    }
-    const t = (preloadedItem?.title || '').toLowerCase();
-    if (t.includes('reawakened') || t.includes('alas roban') || t.includes('kabut berduri') || t.includes('siksa kubur') || t.includes('ipar adalah maut')) {
-      if (t.includes('alas roban')) {
-        navigate('/tv/sajadah_panjang', { replace: true });
-      } else {
-        navigate('/movie/31591', { replace: true });
-      }
-    }
-  }, [id, preloadedItem, navigate]);
 
   useEffect(() => {
     let isMounted = true;
@@ -138,6 +97,24 @@ export default function DetailPage({ type: propType }) {
         }
       } catch (e) {
         console.warn('Fast path detail catalog lookup error:', e);
+      }
+
+      // 1.5. CLOUDX PROVIDER PATH (KlikXXI, Idlix, LK21, Ngefilm, Pusatfilm, Sflix)
+      try {
+        const cloudxItem = await CloudXService.getDetail(id);
+        if (cloudxItem && isMounted) {
+          const fullItem = { ...cloudxItem, media_type: cloudxItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
+          setItem(fullItem);
+          setDetails(fullItem);
+          setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
+          if (fullItem.tmdbId && fullItem.media_type === 'tv') {
+            fetchSeason(fullItem.tmdbId, 1);
+          }
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('CloudX detail lookup error:', e);
       }
 
       // 2. DUB INDO PATH

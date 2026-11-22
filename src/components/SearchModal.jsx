@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, Film, Tv, Sparkles, Globe, Filter } from 'lucide-react';
+import { Search, X, Film, Tv, Sparkles, Globe, Filter, Zap, Clapperboard, Video, Disc, Mic } from 'lucide-react';
 import { TmdbService } from '../services/tmdbService';
 import { DubIndoService } from '../services/dubIndoService';
 import { MovieBoxService } from '../services/movieBoxService';
+import { CloudXService, CLOUDX_PROVIDERS } from '../services/cloudXService';
 import MovieCard from './MovieCard';
 
 // Smart normalizer to group series episodes/seasons under a single unified title
@@ -69,16 +70,18 @@ function mergeAndDeduplicateSeries(items) {
 }
 
 const QUICK_TAGS = [
+  'Kabut Berduri',
+  'Siksa Kubur',
+  'Ipar Adalah Maut',
+  'Agak Laen',
+  'The Big 4',
+  'Gadis Kretek',
+  'Sajadah Panjang',
   'Deadpool & Wolverine',
+  'Dune 2',
   'Solo Leveling',
-  'Cars Dub Indo',
-  'Squid Game',
-  'Moana',
-  'Demon Slayer',
-  'Dune',
   'Avatar',
-  'One Piece',
-  'Spiderman'
+  'One Piece'
 ];
 
 export default function SearchModal({
@@ -89,7 +92,7 @@ export default function SearchModal({
   onToggleWatchlist,
 }) {
   const [query, setQuery] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, movie, tv, anime, dubindo
+  const [selectedProvider, setSelectedProvider] = useState('all');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
@@ -106,133 +109,115 @@ export default function SearchModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Debounced search
+  // When selectedProvider changes without query, load curated provider items for browsing
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
-      setLoading(false);
+      if (selectedProvider !== 'all') {
+        setLoading(true);
+        CloudXService.getByProvider(selectedProvider)
+          .then((items) => {
+            setResults(items || []);
+          })
+          .catch(() => setResults([]))
+          .finally(() => setLoading(false));
+      } else {
+        setResults([]);
+        setLoading(false);
+      }
       return;
     }
 
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        let combined = [];
-
-        if (filterType === 'dubindo') {
-          // Search only Dub Indo
-          combined = await DubIndoService.searchDubIndo(query);
-        } else if (filterType === 'moviebox') {
-          // Search MovieBox catalog
-          const mbRes = await MovieBoxService.search(query);
-          combined = mbRes || [];
-        } else {
-          // Search across TMDB, Dub Indo, and MovieBox
-          const [tmdbRes, dubRes, mbRes] = await Promise.all([
-            TmdbService.searchMulti(query),
-            DubIndoService.searchDubIndo(query),
-            MovieBoxService.search(query).catch(() => []),
-          ]);
-
-          let filteredTmdb = tmdbRes || [];
-          if (filterType === 'movie') {
-            filteredTmdb = filteredTmdb.filter(i => i.media_type === 'movie');
-          } else if (filterType === 'tv') {
-            filteredTmdb = filteredTmdb.filter(i => i.media_type === 'tv');
-          }
-
-          // Prioritize relevant dub indo titles and moviebox items
-          combined = [
-            ...dubRes.slice(0, 10),
-            ...(mbRes || []).slice(0, 10),
-            ...filteredTmdb
-          ];
-        }
-
-        // SMART CONSOLIDATION: Merge and group separated series/seasons into a single unified title
-        const deduplicated = mergeAndDeduplicateSeries(combined);
+        const searchRes = await CloudXService.search(query, selectedProvider);
+        const deduplicated = mergeAndDeduplicateSeries(searchRes);
         setResults(deduplicated);
       } catch (err) {
         console.error('Search error:', err);
       } finally {
         setLoading(false);
       }
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, filterType]);
+  }, [query, selectedProvider]);
 
   const handleQuickTagClick = (tag) => {
     setQuery(tag);
   };
 
+  const currentProviderObj = CLOUDX_PROVIDERS.find(p => p.id === selectedProvider) || CLOUDX_PROVIDERS[0];
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-xl animate-fadeIn p-4 sm:p-6 md:p-8 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-2xl animate-fadeIn p-3 sm:p-6 md:p-8 overflow-hidden">
       <div className="max-w-6xl w-full mx-auto flex flex-col h-full">
         {/* Search Bar Header */}
-        <div className="relative flex items-center gap-3 bg-cinema-surface/90 border border-cinema-border rounded-2xl p-2 sm:p-3 shadow-2xl backdrop-blur-md">
-          <Search className="w-5 h-5 sm:w-6 sm:h-6 text-cinema-cyan ml-2 flex-none" />
+        <div className="relative flex items-center gap-3 bg-zinc-900/90 border border-white/10 rounded-2xl p-2.5 sm:p-3 shadow-2xl backdrop-blur-md">
+          <Search className="w-5 h-5 sm:w-6 sm:h-6 text-white ml-2 flex-none" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ketik judul film, serial, anime, atau dub indo..."
-            className="flex-1 bg-transparent text-white placeholder-slate-400 text-sm sm:text-base outline-none"
+            placeholder="Cari film bioskop, series Indo, Netflix, anime, atau judul dubbing..."
+            className="flex-1 bg-transparent text-white placeholder-zinc-500 text-sm sm:text-base outline-none"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="p-1.5 rounded-lg hover:bg-cinema-card text-slate-400 hover:text-white"
+              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           )}
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-cinema-card hover:bg-cinema-card-hover border border-cinema-border text-slate-300 hover:text-white text-xs font-semibold"
+            className="p-2 sm:px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-200 hover:text-white text-xs font-semibold active:scale-95 transition-all"
           >
             Tutup
           </button>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2 my-4">
-          <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5 mr-1">
-            <Filter className="w-3.5 h-3.5" />
-            <span>Kategori:</span>
-          </span>
-          {[
-            { id: 'all', label: 'Semua Koleksi' },
-            { id: 'movie', label: 'Movies' },
-            { id: 'tv', label: 'TV Series' },
-            { id: 'dubindo', label: '🇮🇩 Dub Indo Saja' },
-            { id: 'moviebox', label: '⚡ MovieBox' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilterType(tab.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                filterType === tab.id
-                  ? 'bg-cinema-cyan text-cinema-bg font-bold shadow-md shadow-cinema-cyan/20'
-                  : 'bg-cinema-surface/70 text-slate-300 hover:bg-cinema-card-hover border border-cinema-border/50'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* CloudX Provider Filter Pills (Separation by API Provider) */}
+        <div className="my-3">
+          <div className="flex items-center gap-1.5 mb-2 px-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-zinc-400" />
+              <span>Pilih Sumber API / Provider (CloudX):</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+            {CLOUDX_PROVIDERS.map((provider) => {
+              const isSelected = selectedProvider === provider.id;
+              return (
+                <button
+                  key={provider.id}
+                  onClick={() => setSelectedProvider(provider.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-white text-black font-extrabold shadow-lg scale-[1.02]'
+                      : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+                  }`}
+                >
+                  <span>{provider.tag || provider.name}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Quick Suggestion Chips */}
-        {!query && (
-          <div className="mb-6">
-            <p className="text-xs font-semibold text-slate-400 mb-2">Paling Sering Dicari:</p>
+        {!query && selectedProvider === 'all' && (
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-zinc-400 mb-2 px-1">Paling Sering Dicari:</p>
             <div className="flex flex-wrap gap-2">
               {QUICK_TAGS.map((tag) => (
                 <button
                   key={tag}
                   onClick={() => handleQuickTagClick(tag)}
-                  className="px-3 py-1 rounded-lg text-xs bg-cinema-card/70 hover:bg-cinema-card-hover text-slate-300 hover:text-cinema-cyan border border-cinema-border/50 transition-all"
+                  className="px-3 py-1 rounded-lg text-xs bg-zinc-900/70 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 transition-all active:scale-95"
                 >
                   {tag}
                 </button>
@@ -241,17 +226,29 @@ export default function SearchModal({
           </div>
         )}
 
+        {/* Status / Provider Info Banner */}
+        {selectedProvider !== 'all' && !loading && (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-zinc-900/60 border border-white/10 flex items-center justify-between text-xs text-zinc-300">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Sumber Aktif: <strong>{currentProviderObj.name}</strong> ({currentProviderObj.description || 'Database Film'})</span>
+            </span>
+            <span className="text-zinc-500 text-[11px] font-medium">{results.length} judul tersedia</span>
+          </div>
+        )}
+
         {/* Results Scroll Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar -mr-2 pr-2">
           {loading ? (
-            <div className="py-20 text-center text-slate-400 text-sm animate-pulse">
-              Mencari katalog film dan series...
+            <div className="py-24 text-center text-zinc-400 text-sm animate-pulse flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+              <span>Mencari film di katalog {currentProviderObj.name}...</span>
             </div>
           ) : results.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4 pb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 pb-12">
               {results.map((item) => (
                 <MovieCard
-                  key={`${item.id}-${item.isDubIndo ? 'dub' : 'tmdb'}`}
+                  key={`${item.id}-${item.provider || 'gen'}`}
                   item={item}
                   onClick={onMovieClick}
                   onPlay={onPlayClick}
@@ -261,12 +258,17 @@ export default function SearchModal({
               ))}
             </div>
           ) : query ? (
-            <div className="py-20 text-center text-slate-400 text-sm">
-              Tidak ditemukan film dengan kata kunci "{query}". Coba kata kunci lain atau pilih filter "Semua Koleksi".
+            <div className="py-24 text-center text-zinc-400 text-sm">
+              <p className="font-semibold text-white mb-1">Tidak ditemukan film dengan kata kunci "{query}"</p>
+              <p className="text-zinc-500 text-xs">Coba ganti kata kunci atau pilih filter "Semua Provider" di atas.</p>
+            </div>
+          ) : selectedProvider === 'all' ? (
+            <div className="py-24 text-center text-zinc-500 text-sm">
+              Ketik judul film bioskop, series Indonesia, atau pilih salah satu provider di atas.
             </div>
           ) : (
-            <div className="py-16 text-center text-slate-500 text-sm">
-              Ketik nama film, serial tv, anime favorit, atau dubbing indonesia di kolom pencarian di atas.
+            <div className="py-24 text-center text-zinc-500 text-sm">
+              Belum ada film untuk ditampilkan dari provider ini. Ketik judul di kolom pencarian.
             </div>
           )}
         </div>
