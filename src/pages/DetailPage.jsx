@@ -152,7 +152,8 @@ export default function DetailPage({ type: propType }) {
             // If TMDB ID is available, fetch rich cast & crew metadata
             if (found.tmdbId) {
               try {
-                const tmdbData = await TmdbService.getDetails(found.tmdbId, found.media_type || 'movie');
+                const dubMediaType = found.media_type || (found.episodes?.length > 0 ? 'tv' : 'movie');
+                const tmdbData = await TmdbService.getDetails(found.tmdbId, dubMediaType);
                 if (tmdbData && isMounted) {
                   setDetails(tmdbData);
                 }
@@ -290,7 +291,7 @@ export default function DetailPage({ type: propType }) {
       ? playItem.tmdbId
       : playItem.id;
     if (playItem.isDubIndo) {
-      navigate(`/watch/dub/${playItem.id}`, { state: { item: playItem } });
+      navigate(`/watch/dub/${playItem.id}`, { state: { item: playItem, initialEpisode: episode } });
     } else if (isSeries) {
       navigate(`/watch/tv/${targetWatchId}/${season}/${episode}`, { state: { item: playItem } });
     } else {
@@ -332,13 +333,13 @@ export default function DetailPage({ type: propType }) {
   const isSeries = item.media_type === 'tv' || data.media_type === 'tv' || (data.seasons && data.seasons.length > 0) || (item.episodes && item.episodes.length > 0);
 
   const rawBackdrop = data.backdrop_path || item.backdrop_path || data.thumbnail;
-  const backdropUrl = item.isDubIndo
-    ? (rawBackdrop || '')
+  const backdropUrl = rawBackdrop?.startsWith('http')
+    ? rawBackdrop
     : TmdbService.getBackdropUrl(rawBackdrop, 'original');
 
   const rawPoster = data.poster_path || item.poster_path || data.thumbnail;
-  const posterUrl = item.isDubIndo
-    ? (rawPoster || '')
+  const posterUrl = rawPoster?.startsWith('http')
+    ? rawPoster
     : TmdbService.getImageUrl(rawPoster, 'w500');
 
   const releaseDate = data.release_date || data.first_air_date || item.release_date || '';

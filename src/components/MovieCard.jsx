@@ -196,7 +196,15 @@ export default function MovieCard({
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-zinc-400 font-normal">
           {year && <span>{year}</span>}
           {year && <span>•</span>}
-          <span>{item.isDubIndo ? (item.duration || 'Full Movie') : isSeries ? 'Series' : 'Film'}</span>
+          <span>
+            {item.isDubIndo
+              ? isSeries
+                ? `${Array.isArray(item.episodes) ? item.episodes.length : 1} Episode`
+                : item.duration || 'Full Movie'
+              : isSeries
+                ? 'Series'
+                : 'Film'}
+          </span>
         </div>
       </div>
     </div>

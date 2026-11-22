@@ -16,6 +16,7 @@ const cache = {
   all_content: null,
   streamSources: null,
   dubTmdbMap: null,
+  dubSeriesTmdbMap: null,
 };
 
 let isCuratedMoviesReady = false;
@@ -48,13 +49,58 @@ export function cleanTitle(raw) {
   if (!raw) return '';
   let c = raw;
   c = c.replace(/[\u200B-\u200D\uFEFF\u2060]/g, '');
-  c = c.replace(/(\b(dub\s*indo|dubbing\s*indo+nesia|indo+\s*dub|sub\s*indo|bahasa\s*indo+nesia|dubb\s*indo+nesia|by\s*@\S+)\b)/gi, '');
+  c = c.replace(/(\b(dub\s*indo(?:nesia)?|dubbing\s*indo+nesia|indo+\s*dub|sub\s*indo|bahasa\s*indo+nesia|dubb\s*indo+nesia|by\s*@\S+)\b)/gi, '');
   c = c.replace(/\[\s*(1080p|720p|480p|hd|web-dl|blu\s*ray|remastered)\s*\]/gi, '');
   c = c.replace(/\b(1080p|720p|480p|hd|web-dl|blu\s*ray|remastered|full\s*movie)\b/gi, '');
   c = c.replace(/[-_–—:.,\s]+$/g, '');
   c = c.replace(/^[-_–—:.,\s]+/g, '');
   c = c.replace(/\s+/g, ' ').trim();
   return c || raw;
+}
+
+/**
+ * Extracts canonical series title from messy per-episode upload titles so all episodes group cleanly under one title.
+ */
+export function extractSeriesBaseTitle(raw) {
+  let s = String(raw || '').replace(/[\u200B-\u200D\uFEFF\u2060]/g, '');
+  s = s.replace(/\[[^\]]*\]/g, ' ');
+  s = s.replace(/\(\s*(?:s\d{1,2}|season\s*\d+|musim\s*\d+|book[^)]*|dub[^)]*|bahasa[^)]*|\d{4}|\s*)\)/gi, ' ');
+  s = s.replace(/\s*[-–—|:]?\s*\b(?:s\d{1,2}\s*[-.]?\s*e\d{1,3}|s\d{1,2}\b|season\s*\d+|musim\s*\d+|episode\b|eps\.?\b|ep\.?\s*\d+|bagian\s*\d+|part\s*\d+|vol\.?\s*\d+)[\s\S]*$/i, '');
+  s = s.replace(/\s*[-–—|:]?\s*\b(?:dub\s*indo(?:nesia)?|dubbing\s*(?:bahasa\s*)?indo(?:nesia)?|dubb\s*indo(?:nesia)?|indo+\s*dub|bahasa\s*indo(?:nesia)?|dub\s*malay|sub\s*indo|jalur\s*audio)\b[\s\S]*$/i, '');
+  s = s.replace(/\s*[-–—#]\s*\d{1,3}\s*$/i, '');
+  s = s.replace(/\b(1080p|720p|480p|hd|web-dl|bluray|blu\s*ray|remastered|tamat|end|complete[d]?|full\s*movie|pilot|rtv)\b/gi, ' ');
+  s = s.replace(/^['"`\-_–—:.,|/\s]+/g, '').replace(/['"`\-_–—:.,|/\s]+$/g, '').replace(/\s+/g, ' ').trim();
+
+  const lower = s.toLowerCase();
+  if (lower.startsWith('spongebob')) return 'SpongeBob SquarePants';
+  if (lower.startsWith('avatar the legend of aang')) return 'Avatar: The Last Airbender';
+  if (lower.startsWith('the legend of korra')) return 'The Legend of Korra';
+  if (lower.startsWith('courage')) return 'Courage the Cowardly Dog';
+  if (lower.startsWith('we bare bears')) return 'We Bare Bears';
+  if (lower.startsWith('cars toon')) return "Cars Toon: Mater's Tall Tales";
+  if (lower.startsWith('kera sakti')) return 'Journey to the West';
+  if (lower.startsWith('ksatria baja hitam rx')) return 'Kamen Rider Black RX';
+  if (lower.startsWith('omar')) return 'Omar';
+  if (lower.startsWith('squid game, the challenge') || lower.startsWith('squid game the challenge')) return 'Squid Game: The Challenge';
+  if (lower.startsWith('marvel ultimate spider')) return 'Ultimate Spider-Man';
+  if (lower.startsWith('transformers prime')) return 'Transformers: Prime';
+  return s;
+}
+
+function parseSeasonEpisode(rawTitle) {
+  const s = String(rawTitle || '');
+  const seMatch = s.match(/\bS0*(\d{1,2})\s*[-.]?\s*E(?:ps?|p)?\.?\s*0*(\d{1,3})\b/i);
+  if (seMatch) {
+    return { seasonNumber: parseInt(seMatch[1], 10), episodeNumber: parseInt(seMatch[2], 10) };
+  }
+  const sMatch = s.match(/\b(?:season|musim|book)\s*0*(\d{1,2})\b/i) || s.match(/\bS0*(\d{1,2})\b/i);
+  const eMatch =
+    s.match(/\b(?:episode|eps?\.?)\s*0*(\d{1,3})\b/i) ||
+    s.match(/\s[-–—#]\s*0*(\d{1,3})\b/);
+  return {
+    seasonNumber: sMatch ? parseInt(sMatch[1], 10) : 1,
+    episodeNumber: eMatch ? parseInt(eMatch[1], 10) : 9999,
+  };
 }
 
 export function cleanDescription(raw) {
@@ -234,6 +280,21 @@ export const DubIndoService = {
     return cache.dubTmdbMap;
   },
 
+  async getDubSeriesTmdbMap() {
+    if (cache.dubSeriesTmdbMap) return cache.dubSeriesTmdbMap;
+    try {
+      const res = await fetch('/data/dub_series_tmdb_map.json');
+      if (res.ok) {
+        cache.dubSeriesTmdbMap = await res.json();
+      } else {
+        cache.dubSeriesTmdbMap = {};
+      }
+    } catch {
+      cache.dubSeriesTmdbMap = {};
+    }
+    return cache.dubSeriesTmdbMap;
+  },
+
   async getStreamSources() {
     if (cache.streamSources) return cache.streamSources;
     try {
@@ -305,6 +366,8 @@ export const DubIndoService = {
       seenIds.add(rawId);
 
       const mapEntry = tmdbMap[rawId] || null;
+      // Require genuine TMDB poster so Dub Indo grid never renders blank dark cards
+      if (!mapEntry?.poster_path) return;
       const tmdbId = mapEntry?.tmdbId || null;
       const embedToken = mapEntry?.token || (item.slug ? (item.slug.match(/_([a-zA-Z0-9]+)$/) || [])[1] : (item.url ? (item.url.match(/_([a-zA-Z0-9]+)\.html/) || [])[1] : null));
       const resolvedStream = resolveStreamUrl(rawStreamUrl);
@@ -382,8 +445,9 @@ export const DubIndoService = {
     // 2. Check series group cache
     try {
       const seriesList = await this.getSeries();
-      const foundSeries = seriesList.find(s => 
-        String(s.id) === String(targetId) || 
+      const foundSeries = seriesList.find(s =>
+        String(s.id) === String(targetId) ||
+        String(s.seriesKey || '') === cleanId ||
         String(s.id).includes(cleanId) ||
         (s.tmdbId && String(s.tmdbId) === cleanId)
       );
@@ -501,60 +565,131 @@ export const DubIndoService = {
   },
 
   /**
-   * Loads verified Dub Indo series (proper seasons/episodes only)
+   * Loads verified Dub Indo series grouped cleanly by canonical title with genuine TMDB posters.
    */
   async getSeries() {
     if (isSeriesProcessed && seriesGroupMap.size > 0) {
       return Array.from(seriesGroupMap.values());
     }
 
-    const rawSeries = await loadJson('series.json');
-    const sources = await this.getStreamSources();
+    const [rawSeries, sources, seriesTmdbMap] = await Promise.all([
+      loadJson('series.json'),
+      this.getStreamSources(),
+      this.getDubSeriesTmdbMap(),
+    ]);
 
     seriesGroupMap.clear();
+    const rawGroups = new Map();
 
-    rawSeries.forEach(item => {
+    rawSeries.forEach((item) => {
       const durMins = parseDurationMinutes(item.duration);
       if (durMins < 10) return;
 
-      const title = item.title || '';
-      const cleanName = cleanTitle(title)
-        .replace(/season\s*\d+/gi, '')
-        .replace(/episode\s*\d+/gi, '')
-        .replace(/eps?\s*\d+/gi, '')
-        .trim();
+      const rawStream = sources[String(item.id)] || sources[String(item.url)] || null;
+      if (!rawStream) return;
+      const streamUrl = resolveStreamUrl(rawStream);
+      if (!streamUrl) return;
 
-      if (!cleanName || cleanName.length < 3) return;
-      const seriesKey = cleanName.toLowerCase();
+      const canonicalTitle = extractSeriesBaseTitle(item.title);
+      if (!canonicalTitle || canonicalTitle.length < 2) return;
+      const seriesKey = canonicalTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seriesKey) return;
 
-      if (!seriesGroupMap.has(seriesKey)) {
-        seriesGroupMap.set(seriesKey, {
-          id: `dub_series_${item.id}`,
-          title: cleanName,
-          poster_path: item.thumbnail,
-          backdrop_path: item.thumbnail,
-          isDubIndo: true,
-          media_type: 'tv',
-          vote_average: 8.7,
-          description: item.description || `Serial kartun & anime ${cleanName} dalam Dubbing Bahasa Indonesia.`,
+      const mapEntry = seriesTmdbMap[seriesKey];
+      if (!mapEntry?.poster_path) return;
+
+      if (!rawGroups.has(seriesKey)) {
+        rawGroups.set(seriesKey, {
+          seriesKey,
+          canonicalTitle,
+          mapEntry,
+          firstId: item.id,
+          firstDesc: item.description,
           episodes: [],
+          seenEpIds: new Set(),
         });
       }
 
-      const series = seriesGroupMap.get(seriesKey);
-      const rawStream = sources[String(item.id)] || sources[String(item.url)] || null;
-      const streamUrl = resolveStreamUrl(rawStream);
+      const grp = rawGroups.get(seriesKey);
+      const epUniqueKey = String(item.id || streamUrl);
+      if (grp.seenEpIds.has(epUniqueKey)) return;
+      grp.seenEpIds.add(epUniqueKey);
 
-      series.episodes.push({
+      const { seasonNumber, episodeNumber } = parseSeasonEpisode(item.title);
+      grp.episodes.push({
         id: item.id,
-        title: title,
-        duration: item.duration,
-        thumbnail: item.thumbnail,
+        rawTitle: item.title || canonicalTitle,
+        season_number: seasonNumber,
+        parsedEpNum: episodeNumber,
+        duration: item.duration || '24m',
         streamUrl,
+        description: cleanDescription(item.description),
       });
     });
 
-    const validSeries = Array.from(seriesGroupMap.values()).filter(s => s.episodes.length >= 1);
+    for (const grp of rawGroups.values()) {
+      if (grp.episodes.length === 0) continue;
+
+      const tmdbPoster = grp.mapEntry.poster_path.startsWith('http')
+        ? grp.mapEntry.poster_path
+        : `https://image.tmdb.org/t/p/w500${grp.mapEntry.poster_path}`;
+      const tmdbBackdrop = grp.mapEntry.backdrop_path
+        ? (grp.mapEntry.backdrop_path.startsWith('http')
+            ? grp.mapEntry.backdrop_path
+            : `https://image.tmdb.org/t/p/original${grp.mapEntry.backdrop_path}`)
+        : tmdbPoster;
+
+      grp.episodes.sort((a, b) => {
+        if (a.season_number !== b.season_number) return a.season_number - b.season_number;
+        if (a.parsedEpNum !== b.parsedEpNum) return a.parsedEpNum - b.parsedEpNum;
+        return a.rawTitle.localeCompare(b.rawTitle);
+      });
+
+      const sortedEpisodes = grp.episodes.map((ep, idx) => {
+        const cleanEpName = cleanTitle(ep.rawTitle);
+        return {
+          id: ep.id,
+          episode_number: idx + 1,
+          season_number: ep.season_number,
+          name: cleanEpName || `Season ${ep.season_number} • Episode ${idx + 1}`,
+          overview: ep.description || `Episode ${idx + 1} serial ${grp.mapEntry.title || grp.canonicalTitle} dalam audio Dubbing Bahasa Indonesia.`,
+          duration: ep.duration,
+          still_path: tmdbBackdrop || tmdbPoster,
+          thumbnail: tmdbBackdrop || tmdbPoster,
+          streamUrl: ep.streamUrl,
+        };
+      });
+
+      const ratingNum = grp.mapEntry.vote_average
+        ? parseFloat(Number(grp.mapEntry.vote_average).toFixed(1))
+        : 8.5;
+
+      seriesGroupMap.set(grp.seriesKey, {
+        id: `dub_series_${grp.seriesKey}`,
+        seriesKey: grp.seriesKey,
+        tmdbId: grp.mapEntry.tmdbId || null,
+        title: grp.mapEntry.title || grp.canonicalTitle,
+        year: grp.mapEntry.year || '',
+        release_date: grp.mapEntry.year ? `${grp.mapEntry.year}-01-01` : '',
+        first_air_date: grp.mapEntry.year ? `${grp.mapEntry.year}-01-01` : '',
+        thumbnail: tmdbPoster,
+        poster_path: tmdbPoster,
+        backdrop_path: tmdbBackdrop,
+        isDubIndo: true,
+        media_type: 'tv',
+        vote_average: ratingNum,
+        description:
+          grp.mapEntry.overview ||
+          cleanDescription(grp.firstDesc) ||
+          `Serial ${grp.mapEntry.title || grp.canonicalTitle} (${sortedEpisodes.length} Episode) dalam audio Dubbing Bahasa Indonesia resmi.`,
+        streamUrl: sortedEpisodes[0].streamUrl,
+        episodes: sortedEpisodes,
+      });
+    }
+
+    const validSeries = Array.from(seriesGroupMap.values()).sort(
+      (a, b) => (b.episodes?.length || 0) - (a.episodes?.length || 0)
+    );
     isSeriesProcessed = true;
     return validSeries;
   },

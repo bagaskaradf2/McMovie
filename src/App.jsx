@@ -919,9 +919,9 @@ export default function App() {
 
                     <div className="flex flex-wrap items-center gap-2 mb-6">
                       {[
-                        { id: 'all', label: 'Semua Dub Indo' },
-                        { id: 'movies', label: 'Film Dub Indo' },
-                        { id: 'series', label: 'Series Dub Indo' },
+                        { id: 'all', label: `Semua Dub Indo (${dubIndoMovies.length + dubIndoSeries.length})` },
+                        { id: 'movies', label: `Film Dub Indo (${dubIndoMovies.length})` },
+                        { id: 'series', label: `Series Dub Indo (${dubIndoSeries.length})` },
                       ].map((f) => (
                         <button
                           key={f.id}

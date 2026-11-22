@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Play,
   ChevronLeft,
@@ -54,6 +54,8 @@ export default function WatchPage({
   preloadedItem,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeInitialEpisode = location.state?.initialEpisode;
 
   const initialSeasonData = preloadedItem
     ? (() => {
@@ -80,7 +82,8 @@ export default function WatchPage({
   const [loading, setLoading] = useState(!preloadedItem);
   const [metadataReady, setMetadataReady] = useState(false);
   const [currentSeason, setCurrentSeason] = useState(parseInt(propSeason, 10) || 1);
-  const [currentEpisode, setCurrentEpisode] = useState(parseInt(propEpisode, 10) || 1);
+  const [currentEpisode, setCurrentEpisode] = useState(parseInt(routeInitialEpisode || propEpisode, 10) || 1);
+  const [activeDubEpisodeUrl, setActiveDubEpisodeUrl] = useState('');
   const [selectedPart, setSelectedPart] = useState(1);
   const [seasonData, setSeasonData] = useState(initialSeasonData);
   const [loadingSeason, setLoadingSeason] = useState(false);
@@ -99,8 +102,12 @@ export default function WatchPage({
 
   useEffect(() => {
     if (propSeason) setCurrentSeason(parseInt(propSeason, 10) || 1);
-    if (propEpisode) setCurrentEpisode(parseInt(propEpisode, 10) || 1);
-  }, [propSeason, propEpisode]);
+    if (routeInitialEpisode) {
+      setCurrentEpisode(parseInt(routeInitialEpisode, 10) || 1);
+    } else if (propEpisode) {
+      setCurrentEpisode(parseInt(propEpisode, 10) || 1);
+    }
+  }, [propSeason, propEpisode, routeInitialEpisode]);
 
   const fetchSeason = useCallback(async (tvId, sNum, currentItem = item) => {
     setLoadingSeason(true);
@@ -393,6 +400,32 @@ export default function WatchPage({
     return [];
   }, [rawEpisodes, item]);
 
+  // Resolve distinct per-episode playable stream for grouped Dub Indo Series
+  useEffect(() => {
+    let cancelled = false;
+    if (!item?.isDubIndo || !isSeries) {
+      setActiveDubEpisodeUrl('');
+      return;
+    }
+    const matchedEp = episodesList.find((e) => (e.episode_number || e.episode) === currentEpisode);
+    const rawEpUrl = matchedEp?.streamUrl || '';
+    if (!rawEpUrl) {
+      setActiveDubEpisodeUrl('');
+      return;
+    }
+    setActiveDubEpisodeUrl('');
+    DubIndoService.resolveDirectPlayableUrl(rawEpUrl)
+      .then((direct) => {
+        if (!cancelled) setActiveDubEpisodeUrl(direct || rawEpUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveDubEpisodeUrl(rawEpUrl);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.isDubIndo, item?.id, isSeries, currentEpisode, episodesList]);
+
   // 3. Build unified PURE direct streams list (Direct MP4 + CloudX HLS — ZERO external iframes)
   const directStreams = useMemo(() => {
     if (!item) return [];
@@ -410,19 +443,20 @@ export default function WatchPage({
             : item.parts[(currentEpisode - 1) % item.parts.length] || item.parts[0];
         baseUrl = partObj?.url || item.streamUrl;
       }
-      if (item.directWasabiUrl) {
+      const primaryResolved = isSeries ? activeDubEpisodeUrl : item.directWasabiUrl;
+      if (primaryResolved) {
         list.push({
-          id: 'dub_wasabi',
+          id: `dub_wasabi_ep_${currentEpisode}`,
           label: '🇮🇩 Dub Indo Direct (Wasabi HD)',
-          url: item.directWasabiUrl,
+          url: primaryResolved,
           type: 'mp4',
           provider: 'dubindo',
           providerLabel: 'Dub Indo Direct',
         });
       }
-      if (baseUrl) {
+      if (baseUrl && baseUrl !== primaryResolved) {
         list.push({
-          id: 'dub_primary',
+          id: `dub_primary_ep_${currentEpisode}`,
           label: '🇮🇩 Dub Indo Mirror 1',
           url: baseUrl,
           type: 'mp4',
@@ -430,7 +464,7 @@ export default function WatchPage({
           providerLabel: 'Dub Indo Mirror',
         });
       }
-      if (item.streamBackupUrl && item.streamBackupUrl !== baseUrl) {
+      if (!isSeries && item.streamBackupUrl && item.streamBackupUrl !== baseUrl) {
         list.push({
           id: 'dub_backup',
           label: '🇮🇩 Dub Indo CDN Backup',
@@ -481,7 +515,7 @@ export default function WatchPage({
     }
 
     return list;
-  }, [item, episodesList, currentEpisode, selectedPart, cloudXStreams]);
+  }, [item, episodesList, currentEpisode, selectedPart, cloudXStreams, isSeries, activeDubEpisodeUrl]);
 
   useEffect(() => {
     if (activeStreamIndex >= directStreams.length && directStreams.length > 0) {
@@ -505,9 +539,15 @@ export default function WatchPage({
     setSelectedPart(1);
     setActiveStreamIndex(0);
     if (item) {
-      StorageService.updateProgress(item, { season: currentSeason, episode: epNum, serverId: 'cloudx_hls' });
+      StorageService.updateProgress(item, {
+        season: currentSeason,
+        episode: epNum,
+        serverId: item.isDubIndo ? 'dub_direct' : 'cloudx_hls',
+      });
     }
-    navigate(`/watch/tv/${propId}/${currentSeason}/${epNum}`, { replace: true, state: { item } });
+    if (!item?.isDubIndo && type !== 'dub') {
+      navigate(`/watch/tv/${propId}/${currentSeason}/${epNum}`, { replace: true, state: { item } });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
