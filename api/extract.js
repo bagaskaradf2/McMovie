@@ -26,9 +26,10 @@ function setCachedExtraction(key, payload) {
   extractCache.set(key, { payload, expiresAt: Date.now() + EXTRACT_CACHE_TTL_MS });
 }
 
-function buildProxyUrl(targetUrl, referer) {
+function buildProxyUrl(targetUrl, referer, embedUrl) {
   const params = new URLSearchParams({ url: targetUrl });
   if (referer) params.set('ref', referer);
+  if (embedUrl) params.set('emb', embedUrl);
   return `/api/hls-proxy?${params.toString()}`;
 }
 
@@ -188,7 +189,8 @@ export async function GET(request) {
         id: `${s.provider}_${s.host}_${streams.length}`,
         label: `${pLabel} HD ${num}`,
         url: s.url,
-        proxyUrl: buildProxyUrl(s.url, s.referer),
+        proxyUrl: buildProxyUrl(s.url, s.referer, s.embedUrl),
+        embedUrl: s.embedUrl || '',
         preferProxy: /tnmr\.org|\/stream\//i.test(s.url),
         type: s.type || 'hls',
         provider: s.provider,

@@ -302,7 +302,7 @@ function inferSubtitleMeta(url) {
 /**
  * Fetches an embed/host page, unpacks Dean Edwards P.A.C.K.E.R scripts, and extracts .m3u8 / .mp4 / .vtt.
  */
-export async function extractDirectMediaFromHost(rawEmbedUrl, referer) {
+export async function extractDirectMediaFromHost(rawEmbedUrl, referer, { skipVerify = false } = {}) {
   const normalizedUrl = normalizeEmbedHostUrl(rawEmbedUrl);
   if (!normalizedUrl) return { streams: [], subtitles: [] };
 
@@ -330,6 +330,7 @@ export async function extractDirectMediaFromHost(rawEmbedUrl, referer) {
           host: hostName,
           referer: `${finalOrigin}/`,
           origin: finalOrigin,
+          embedUrl: normalizedUrl,
         });
       } catch {
         // Ignore malformed URL
@@ -386,6 +387,13 @@ export async function extractDirectMediaFromHost(rawEmbedUrl, referer) {
         seenUrls.add(s.url);
         uniqueStreams.push(s);
       }
+    }
+
+    if (skipVerify) {
+      return {
+        streams: uniqueStreams,
+        subtitles: Array.from(subtitlesMap.values()),
+      };
     }
 
     // Fast playability verification so broken HTTP 403/502 streams never win or cut off races

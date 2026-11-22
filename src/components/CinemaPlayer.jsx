@@ -127,9 +127,13 @@ export default function CinemaPlayer({
       hlsRef.current = null;
     }
 
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
     const initialSrc =
       activeStream.type === 'hls'
-        ? activeStream.preferProxy || !activeStream.url
+        ? !isLocalhost || activeStream.preferProxy || !activeStream.url
           ? activeStream.proxyUrl || activeStream.url
           : activeStream.url
         : activeStream.url;

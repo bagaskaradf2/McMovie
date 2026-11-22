@@ -1,11 +1,88 @@
 /**
  * Vercel Serverless Function: /api/hls-proxy
  * Streaming proxy for CloudX .m3u8 manifests, .ts/.m4s media segments, and .vtt/.srt subtitles.
- * Preserves CDN Referer/Origin headers (for ASN/token validation) and rewrites nested HLS URLs.
+ * Includes self-healing per-container token refresh so IP-bound CDN tokens stay valid across Vercel instances.
  */
+import { extractDirectMediaFromHost } from './_cloudxCore.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+const TOKEN_TTL_MS = 10 * 60 * 1000;
+const TOKEN_CACHE_MAX = 150;
+const containerTokenCache = new Map();
+const inflightRefresh = new Map();
+
+function getCachedToken(embedUrl) {
+  const entry = containerTokenCache.get(embedUrl);
+  if (!entry) return null;
+  if (Date.now() >= entry.expiresAt) {
+    containerTokenCache.delete(embedUrl);
+    return null;
+  }
+  return entry;
+}
+
+async function refreshContainerToken(embedUrl, ref) {
+  if (!embedUrl) return null;
+  if (inflightRefresh.has(embedUrl)) {
+    return inflightRefresh.get(embedUrl);
+  }
+
+  const job = (async () => {
+    try {
+      const extracted = await extractDirectMediaFromHost(embedUrl, ref, { skipVerify: true });
+      const candidates = extracted?.streams || [];
+      const best =
+        candidates.find((s) => s.type === 'hls' && /\/hls2\//i.test(s.url)) ||
+        candidates.find((s) => s.type === 'hls') ||
+        candidates[0];
+      if (!best?.url) return null;
+
+      const fresh = new URL(best.url);
+      const tokenEntry = {
+        origin: fresh.origin,
+        search: fresh.search,
+        fullUrl: fresh.href,
+        expiresAt: Date.now() + TOKEN_TTL_MS,
+      };
+      if (containerTokenCache.size >= TOKEN_CACHE_MAX) {
+        const oldest = containerTokenCache.keys().next().value;
+        if (oldest) containerTokenCache.delete(oldest);
+      }
+      containerTokenCache.set(embedUrl, tokenEntry);
+      return tokenEntry;
+    } catch {
+      return null;
+    } finally {
+      inflightRefresh.delete(embedUrl);
+    }
+  })();
+
+  inflightRefresh.set(embedUrl, job);
+  return job;
+}
+
+function applyContainerToken(targetUrlObj, tokenInfo) {
+  if (!tokenInfo) return targetUrlObj;
+  try {
+    if (/\/stream\//i.test(targetUrlObj.pathname) && /master\.m3u8$/i.test(targetUrlObj.pathname) && tokenInfo.fullUrl) {
+      return new URL(tokenInfo.fullUrl);
+    }
+    const rebuilt = new URL(targetUrlObj.href);
+    if (tokenInfo.origin && /\/hls2\//i.test(rebuilt.pathname)) {
+      const freshOriginUrl = new URL(tokenInfo.origin);
+      rebuilt.protocol = freshOriginUrl.protocol;
+      rebuilt.host = freshOriginUrl.host;
+    }
+    if (tokenInfo.search) {
+      rebuilt.search = tokenInfo.search;
+    }
+    return rebuilt;
+  } catch {
+    return targetUrlObj;
+  }
+}
 
 function isBlockedPrivateHost(hostname) {
   const h = (hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
@@ -24,13 +101,14 @@ function isBlockedPrivateHost(hostname) {
   return false;
 }
 
-function wrapProxyUrl(absoluteUrl, ref) {
+function wrapProxyUrl(absoluteUrl, ref, emb) {
   const params = new URLSearchParams({ url: absoluteUrl });
   if (ref) params.set('ref', ref);
+  if (emb) params.set('emb', emb);
   return `/api/hls-proxy?${params.toString()}`;
 }
 
-function rewriteM3u8Manifest(manifestText, baseUrl, ref) {
+function rewriteM3u8Manifest(manifestText, baseUrl, ref, emb) {
   const lines = manifestText.split(/\r?\n/);
   return lines
     .map((rawLine) => {
@@ -42,7 +120,7 @@ function rewriteM3u8Manifest(manifestText, baseUrl, ref) {
         return rawLine.replace(/URI="([^"]+)"/gi, (_, uriVal) => {
           try {
             const abs = new URL(uriVal, baseUrl).href;
-            return `URI="${wrapProxyUrl(abs, ref)}"`;
+            return `URI="${wrapProxyUrl(abs, ref, emb)}"`;
           } catch {
             return `URI="${uriVal}"`;
           }
@@ -51,7 +129,7 @@ function rewriteM3u8Manifest(manifestText, baseUrl, ref) {
 
       try {
         const abs = new URL(line, baseUrl).href;
-        return wrapProxyUrl(abs, ref);
+        return wrapProxyUrl(abs, ref, emb);
       } catch {
         return rawLine;
       }
@@ -84,6 +162,7 @@ export async function GET(request) {
     const targetRaw = reqUrl.searchParams.get('url');
     const refParam = reqUrl.searchParams.get('ref') || '';
     const originParam = reqUrl.searchParams.get('origin') || '';
+    const embParam = reqUrl.searchParams.get('emb') || '';
 
     if (!targetRaw) {
       return Response.json({ error: 'Missing required url parameter' }, { status: 400 });
@@ -116,11 +195,9 @@ export async function GET(request) {
 
     if (refParam) {
       upstreamHeaders.Referer = refParam;
-      try {
-        upstreamHeaders.Origin = originParam || new URL(refParam).origin;
-      } catch {
-        // Ignore malformed referer origin
-      }
+    }
+    if (originParam) {
+      upstreamHeaders.Origin = originParam;
     }
 
     const rangeHeader = request.headers.get('range');
@@ -128,22 +205,43 @@ export async function GET(request) {
       upstreamHeaders.Range = rangeHeader;
     }
 
-    const upstream = await fetch(parsedTarget.href, {
+    let activeTarget = parsedTarget;
+    if (embParam) {
+      const cachedToken = getCachedToken(embParam);
+      if (cachedToken) {
+        activeTarget = applyContainerToken(parsedTarget, cachedToken);
+      }
+    }
+
+    let upstream = await fetch(activeTarget.href, {
       method: 'GET',
       headers: upstreamHeaders,
       redirect: 'follow',
       signal: AbortSignal.timeout(15000),
     });
 
+    if (upstream.status === 403 && embParam) {
+      const freshToken = await refreshContainerToken(embParam, refParam);
+      if (freshToken) {
+        activeTarget = applyContainerToken(parsedTarget, freshToken);
+        upstream = await fetch(activeTarget.href, {
+          method: 'GET',
+          headers: upstreamHeaders,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(15000),
+        });
+      }
+    }
+
     if (!upstream.ok && upstream.status !== 206) {
-      console.error(`[/api/hls-proxy] Upstream HTTP ${upstream.status} for ${parsedTarget.hostname}`);
+      console.error(`[/api/hls-proxy] Upstream HTTP ${upstream.status} for ${activeTarget.hostname}`);
       return new Response(`Upstream error HTTP ${upstream.status}`, {
         status: upstream.status,
         headers: { 'Access-Control-Allow-Origin': '*' },
       });
     }
 
-    const finalUrl = upstream.url || parsedTarget.href;
+    const finalUrl = upstream.url || activeTarget.href;
     const contentType = (upstream.headers.get('content-type') || '').toLowerCase();
     const isSubtitleUrl = /\.(vtt|srt)(\?|$)/i.test(finalUrl) || contentType.includes('text/vtt') || contentType.includes('subrip');
 
@@ -171,7 +269,7 @@ export async function GET(request) {
     if (isM3u8Header) {
       const manifestText = await upstream.text();
       if (manifestText.trimStart().startsWith('#EXTM3U')) {
-        const rewritten = rewriteM3u8Manifest(manifestText, finalUrl, refParam);
+        const rewritten = rewriteM3u8Manifest(manifestText, finalUrl, refParam, embParam);
         return new Response(rewritten, {
           status: 200,
           headers: {
