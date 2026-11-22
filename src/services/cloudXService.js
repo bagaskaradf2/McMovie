@@ -19,7 +19,7 @@ export const CLOUDX_PROVIDERS = [
   {
     id: 'all',
     name: 'Semua Provider',
-    tag: '⚡ Multi-API CloudX',
+    tag: 'Semua Provider',
     icon: 'Sparkles',
     badge: 'Semua',
     color: 'from-cyan-500 to-blue-600',
@@ -236,6 +236,15 @@ export const CloudXService = {
    */
   async getDetail(id) {
     const all = await this.getCatalog();
-    return all.find(i => String(i.id) === String(id) || String(i.tmdbId) === String(id)) || null;
+    const raw = String(id || '');
+    const stripped = raw.replace(/^cx_[a-z0-9]+_/i, '');
+    return (
+      all.find(
+        (i) =>
+          String(i.id) === raw ||
+          String(i.tmdbId) === raw ||
+          String(i.tmdbId) === stripped
+      ) || null
+    );
   }
 };

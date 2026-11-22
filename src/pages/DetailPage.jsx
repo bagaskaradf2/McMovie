@@ -53,57 +53,77 @@ export default function DetailPage({ type: propType }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     async function loadDetailPage() {
-      // 1. FAST PATH: MovieBox & Local Scraped Catalog lookup (0ms instant response)
-      try {
-        const localItem = await MovieBoxService.getDetail(id);
-        if (localItem && isMounted) {
-          const fullItem = { ...localItem, media_type: localItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
-          setItem(fullItem);
-          setDetails(fullItem);
-          setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
+      // 1. FAST PATH: MovieBox & Local Scraped Catalog lookup (skip for pure numeric TMDB IDs)
+      if (!/^\d+$/.test(String(id))) {
+        try {
+          const localItem = await MovieBoxService.getDetail(id);
+          if (localItem && isMounted) {
+            const fullItem = { ...localItem, media_type: localItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
+            setItem(fullItem);
+            setDetails(fullItem);
+            setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
 
-          let genEps = [];
-          if (Array.isArray(fullItem.episodesList) && fullItem.episodesList.length > 0) {
-            genEps = fullItem.episodesList;
-          } else if (Array.isArray(fullItem.episodes) && fullItem.episodes.length > 0) {
-            genEps = fullItem.episodes;
-          } else {
-            const totalEps = (typeof fullItem.episodes === 'number' && fullItem.episodes > 0)
-              ? fullItem.episodes
-              : (fullItem.parts?.length || 1);
+            let genEps = [];
+            if (Array.isArray(fullItem.episodesList) && fullItem.episodesList.length > 0) {
+              genEps = fullItem.episodesList;
+            } else if (Array.isArray(fullItem.episodes) && fullItem.episodes.length > 0) {
+              genEps = fullItem.episodes;
+            } else {
+              const totalEps = (typeof fullItem.episodes === 'number' && fullItem.episodes > 0)
+                ? fullItem.episodes
+                : (fullItem.parts?.length || 1);
 
-            genEps = Array.from({ length: totalEps }, (_, i) => {
-              const epNum = i + 1;
-              return {
-                episode_number: epNum,
-                name: `Episode ${epNum}`,
-                overview: epNum === 1 && fullItem.parts?.length > 0
-                  ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
-                  : `Episode ${epNum} dari serial ${fullItem.title || 'Serial'} durasi penuh.`,
-                still_path: fullItem.backdrop_path || fullItem.poster_path
-              };
-            });
+              genEps = Array.from({ length: totalEps }, (_, i) => {
+                const epNum = i + 1;
+                return {
+                  episode_number: epNum,
+                  name: `Episode ${epNum}`,
+                  overview: epNum === 1 && fullItem.parts?.length > 0
+                    ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
+                    : `Episode ${epNum} dari serial ${fullItem.title || 'Serial'} durasi penuh.`,
+                  still_path: fullItem.backdrop_path || fullItem.poster_path
+                };
+              });
+            }
+            setSeasonData({ episodes: genEps, season_number: 1 });
+            setSelectedSeason(1);
+
+            setLoading(false);
+
+            // If item has a TMDB ID and no local episodesList, fetch extra seasons/credits from TMDB
+            if (fullItem.tmdbId && fullItem.media_type === 'tv' && (!fullItem.episodesList || fullItem.episodesList.length === 0) && (!fullItem.parts || fullItem.parts.length === 0)) {
+              fetchSeason(fullItem.tmdbId, 1);
+            }
+            return;
           }
-          setSeasonData({ episodes: genEps, season_number: 1 });
-          setSelectedSeason(1);
-
-          setLoading(false);
-
-          // If item has a TMDB ID and no local episodesList, fetch extra seasons/credits from TMDB
-          if (fullItem.tmdbId && fullItem.media_type === 'tv' && (!fullItem.episodesList || fullItem.episodesList.length === 0) && (!fullItem.parts || fullItem.parts.length === 0)) {
-            fetchSeason(fullItem.tmdbId, 1);
-          }
-          return;
+        } catch (e) {
+          console.warn('Fast path detail catalog lookup error:', e);
         }
-      } catch (e) {
-        console.warn('Fast path detail catalog lookup error:', e);
       }
 
       // 1.5. CLOUDX PROVIDER PATH (KlikXXI, Idlix, LK21, Ngefilm, Pusatfilm, Sflix)
       try {
         const cloudxItem = await CloudXService.getDetail(id);
         if (cloudxItem && isMounted) {
-          const fullItem = { ...cloudxItem, media_type: cloudxItem.media_type || (type === 'tv' ? 'tv' : 'movie') };
+          const mediaType = cloudxItem.media_type === 'tv' || type === 'tv' ? 'tv' : 'movie';
+          let fullItem = { ...cloudxItem, media_type: mediaType };
+          if (cloudxItem.tmdbId) {
+            try {
+              const tmdbRich = await TmdbService.getDetails(cloudxItem.tmdbId, mediaType);
+              if (tmdbRich && isMounted) {
+                fullItem = {
+                  ...tmdbRich,
+                  ...cloudxItem,
+                  tmdbId: tmdbRich.id || cloudxItem.tmdbId,
+                  original_title: tmdbRich.original_title || tmdbRich.original_name || cloudxItem.original_title,
+                  media_type: mediaType,
+                };
+              }
+            } catch {
+              // Keep cloudx metadata if TMDB times out
+            }
+          }
+          if (!isMounted) return;
           setItem(fullItem);
           setDetails(fullItem);
           setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
@@ -147,14 +167,23 @@ export default function DetailPage({ type: propType }) {
           setLoading(false);
         });
       } else {
-        // 3. TMDB PATH
+        // 3. TMDB PATH (strip cx_<provider>_ prefix if direct URL)
         const mediaType = type === 'tv' ? 'tv' : 'movie';
+        const cxMatch = String(id || '').match(/^cx_([a-z0-9]+)_(.+)$/i);
+        const cleanTmdbId = cxMatch ? cxMatch[2] : id;
+        const providerHint = preloadedItem?.provider || (cxMatch ? cxMatch[1] : undefined);
         try {
-          const data = await TmdbService.getDetails(id, mediaType);
+          const data = await TmdbService.getDetails(cleanTmdbId, mediaType);
           if (!isMounted) return;
 
           if (data) {
-            const fullItem = { ...data, media_type: mediaType };
+            const fullItem = {
+              ...data,
+              id: preloadedItem?.id || data.id,
+              tmdbId: data.id,
+              provider: providerHint,
+              media_type: mediaType,
+            };
             setItem(fullItem);
             setDetails(fullItem);
             setIsWatchlisted(StorageService.isWatchlisted(fullItem.id));
@@ -162,7 +191,7 @@ export default function DetailPage({ type: propType }) {
             if (mediaType === 'tv') {
               const initialSeason = data?.seasons?.find(s => s.season_number > 0)?.season_number || 1;
               setSelectedSeason(initialSeason);
-              fetchSeason(id, initialSeason);
+              fetchSeason(cleanTmdbId, initialSeason);
             }
             setLoading(false);
             return;
@@ -197,7 +226,8 @@ export default function DetailPage({ type: propType }) {
   const fetchSeason = async (tvId, sNum) => {
     setLoadingSeason(true);
     try {
-      const data = await TmdbService.getSeasonDetails(tvId, sNum);
+      const cleanTvId = String(tvId || '').replace(/^cx_[a-z0-9]+_/i, '');
+      const data = await TmdbService.getSeasonDetails(cleanTvId, sNum);
       if (data && data.episodes && data.episodes.length > 0) {
         setSeasonData(data);
       } else if (item?.episodes && typeof item.episodes === 'number') {
@@ -250,12 +280,21 @@ export default function DetailPage({ type: propType }) {
 
   const handlePlayDirect = (season = 1, episode = 1) => {
     if (!item) return;
-    if (item.isDubIndo) {
-      navigate(`/watch/dub/${item.id}`, { state: { item } });
+    const playItem = {
+      ...(details || {}),
+      ...item,
+      original_title: details?.original_title || details?.original_name || item.original_title,
+      tmdbId: item.tmdbId || details?.id || item.id,
+    };
+    const targetWatchId = playItem.provider && !String(playItem.id).startsWith('cx_') && !playItem.isDubIndo
+      ? playItem.tmdbId
+      : playItem.id;
+    if (playItem.isDubIndo) {
+      navigate(`/watch/dub/${playItem.id}`, { state: { item: playItem } });
     } else if (isSeries) {
-      navigate(`/watch/tv/${item.id}/${season}/${episode}`, { state: { item } });
+      navigate(`/watch/tv/${targetWatchId}/${season}/${episode}`, { state: { item: playItem } });
     } else {
-      navigate(`/watch/movie/${item.id}`, { state: { item } });
+      navigate(`/watch/movie/${targetWatchId}`, { state: { item: playItem } });
     }
   };
 
@@ -342,49 +381,51 @@ export default function DetailPage({ type: propType }) {
   return (
     <div className="min-h-screen bg-[#06070a] text-white selection:bg-white selection:text-black">
       {/* Top Bar with Clean Header Actions */}
-      <div className="sticky top-0 z-40 bg-[#06070a]/90 backdrop-blur-2xl border-b border-white/[0.06] px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-        <button
-          onClick={() => navigate(-1) || navigate('/')}
-          className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all active:scale-95 shadow-sm"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          <span>Kembali</span>
-        </button>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleToggleWatchlist}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              isWatchlisted
-                ? 'bg-amber-400 text-black shadow-md'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10'
-            }`}
-          >
-            {isWatchlisted ? <BookmarkCheck className="w-3.5 h-3.5 fill-current" /> : <Bookmark className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{isWatchlisted ? 'Tersimpan' : 'Watchlist'}</span>
-          </button>
-
-          <button
-            onClick={handleShare}
-            className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10 text-xs transition-all"
-            title="Bagikan"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Close button matching reference image */}
+      <div className="sticky top-0 z-40 bg-[#06070a]/90 backdrop-blur-2xl border-b border-white/[0.06] px-4 sm:px-6 lg:px-8 py-3">
+        <div className="max-w-[1400px] mx-auto w-full flex items-center justify-between gap-3">
           <button
             onClick={() => navigate(-1) || navigate('/')}
-            className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 transition-all active:scale-95 ml-1"
-            title="Tutup Halaman"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all active:scale-95 shadow-sm"
           >
-            <X className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4" />
+            <span>Kembali</span>
           </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleWatchlist}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                isWatchlisted
+                  ? 'bg-amber-400 text-black shadow-md'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+              }`}
+            >
+              {isWatchlisted ? <BookmarkCheck className="w-3.5 h-3.5 fill-current" /> : <Bookmark className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{isWatchlisted ? 'Tersimpan' : 'Watchlist'}</span>
+            </button>
+
+            <button
+              onClick={handleShare}
+              className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/10 text-xs transition-all"
+              title="Bagikan"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Close button matching reference image */}
+            <button
+              onClick={() => navigate(-1) || navigate('/')}
+              className="p-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 transition-all active:scale-95 ml-1"
+              title="Tutup Halaman"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Hero Backdrop Banner */}
-      <div className="relative w-full h-[300px] sm:h-[380px] md:h-[460px] overflow-hidden bg-zinc-950">
+      {/* Hero Backdrop Banner (Purely atmospheric) */}
+      <div className="relative w-full h-[240px] sm:h-[320px] md:h-[400px] overflow-hidden bg-zinc-950">
         {showTrailer && trailer ? (
           <div className="w-full h-full">
             <iframe
@@ -406,47 +447,31 @@ export default function DetailPage({ type: propType }) {
                 e.target.src = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1280&auto=format&fit=crop&q=80';
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#06070a] via-[#06070a]/50 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#06070a]/90 via-transparent to-transparent hidden sm:block" />
-
-            {/* Banner Quick Actions (Exact match to top of reference image) */}
-            <div className="absolute bottom-8 left-4 sm:left-8 md:left-12 flex flex-wrap items-center gap-3.5 z-20">
-              <button
-                onClick={() => handlePlayDirect(1, 1)}
-                className="flex items-center gap-2.5 px-7 py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-extrabold text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all"
-              >
-                <Play className="w-5 h-5 fill-black" />
-                <span>Mulai Putar</span>
-              </button>
-
-              <button
-                onClick={handleToggleWatchlist}
-                className="flex items-center gap-2 px-5 py-3.5 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-white font-semibold text-sm backdrop-blur-md hover:scale-105 active:scale-95 transition-all"
-              >
-                {isWatchlisted ? <Check className="w-4 h-4 text-emerald-400" /> : <Plus className="w-4 h-4" />}
-                <span>{isWatchlisted ? 'Tersimpan di Watchlist' : 'Simpan ke Watchlist'}</span>
-              </button>
-
-              {trailer && (
-                <button
-                  onClick={() => setShowTrailer(true)}
-                  className="flex items-center gap-2 px-5 py-3.5 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-white font-semibold text-sm backdrop-blur-md hover:scale-105 active:scale-95 transition-all"
-                >
-                  <Video className="w-4 h-4 text-red-400" />
-                  <span>Trailer</span>
-                </button>
-              )}
-            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-[#06070a] via-[#06070a]/60 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#06070a]/85 via-transparent to-transparent hidden sm:block" />
           </>
         )}
       </div>
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-8 relative z-20 pb-16">
-        {/* Title & Metadata Row */}
-        <div className="flex flex-col sm:flex-row gap-6 items-start">
-          <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
+      {/* Main Container (Editorial Two-Column Layout) */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 -mt-28 sm:-mt-36 md:-mt-44 relative z-20 pb-16">
+        <div className="flex flex-col md:flex-row gap-6 lg:gap-10 items-start">
+          {/* Left Column: Poster Card */}
+          <div className="w-36 sm:w-44 md:w-56 lg:w-64 shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/15 bg-[#11131b]">
+            <img
+              src={posterUrl || backdropUrl}
+              alt={title}
+              className="w-full aspect-[2/3] object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
+              }}
+            />
+          </div>
+
+          {/* Right Column: Badges -> Title -> Genres -> Action Buttons -> Synopsis */}
+          <div className="flex-1 min-w-0 md:pt-8">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
               {item.isDubIndo ? (
                 <span className="px-2.5 py-0.5 text-xs font-bold rounded-md bg-emerald-500 text-black">
                   🇮🇩 DUBBING INDONESIA
@@ -479,19 +504,19 @@ export default function DetailPage({ type: propType }) {
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase leading-tight">
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.1]">
               {title}
             </h1>
 
             {data.tagline && (
-              <p className="mt-1 text-xs sm:text-sm text-zinc-400 italic">
+              <p className="mt-2 text-sm text-zinc-400 italic">
                 "{data.tagline}"
               </p>
             )}
 
             {/* Genres */}
             {genres.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {genres.map((g) => (
                   <span
                     key={g.id || g.name}
@@ -503,13 +528,42 @@ export default function DetailPage({ type: propType }) {
               </div>
             )}
 
+            {/* Primary Actions Row */}
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => handlePlayDirect(1, 1)}
+                className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-sm shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                <Play className="w-4 h-4 fill-black" />
+                <span>Mulai Putar</span>
+              </button>
+
+              <button
+                onClick={handleToggleWatchlist}
+                className="flex items-center gap-2 px-5 py-3.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white font-semibold text-sm backdrop-blur-md active:scale-95 transition-all"
+              >
+                {isWatchlisted ? <Check className="w-4 h-4 text-emerald-400" /> : <Plus className="w-4 h-4" />}
+                <span>{isWatchlisted ? 'Tersimpan di Watchlist' : 'Simpan ke Watchlist'}</span>
+              </button>
+
+              {trailer && (
+                <button
+                  onClick={() => setShowTrailer((p) => !p)}
+                  className="flex items-center gap-2 px-5 py-3.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white font-semibold text-sm backdrop-blur-md active:scale-95 transition-all"
+                >
+                  <Video className="w-4 h-4 text-red-400" />
+                  <span>{showTrailer ? 'Tutup Trailer' : 'Trailer'}</span>
+                </button>
+              )}
+            </div>
+
             {/* Synopsis */}
-            <div className="mt-5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+            <div className="mt-6 pt-6 border-t border-white/[0.08]">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                 Sinopsis
               </h3>
-              <p className="text-sm text-zinc-300 leading-relaxed max-w-4xl">
-                {data.overview || data.description || 'Sinopsis belum tersedia untuk film ini.'}
+              <p className="max-w-3xl text-sm sm:text-[15px] text-zinc-300 leading-relaxed">
+                {data.overview || data.description || 'Sinopsis belum tersedia untuk tayangan ini.'}
               </p>
             </div>
           </div>
@@ -619,7 +673,7 @@ export default function DetailPage({ type: propType }) {
                 Klik "Mulai Putar" di atas untuk menonton Season {selectedSeason}. Server akan otomatis memuat episode terbaru.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {episodesList.map((ep, idx) => {
                   const epNum = ep.episode_number || ep.episode || (idx + 1);
                   const epTitle = ep.name || ep.title || `Episode ${epNum}`;
@@ -677,7 +731,7 @@ export default function DetailPage({ type: propType }) {
             <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white mb-4">
               Film Serupa yang Mungkin Anda Sukai
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-5">
               {similar.map((sim) => (
                 <MovieCard
                   key={sim.id}

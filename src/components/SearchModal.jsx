@@ -70,18 +70,18 @@ function mergeAndDeduplicateSeries(items) {
 }
 
 const QUICK_TAGS = [
-  'Kabut Berduri',
+  'Serangan Balik',
+  'The Odyssey',
+  'Steps',
+  'Ghost in the Cell',
+  'Alas Roban',
+  'Abadi Nan Jaya',
   'Siksa Kubur',
-  'Ipar Adalah Maut',
+  'Kabut Berduri',
+  'MobLand',
   'Agak Laen',
-  'The Big 4',
   'Gadis Kretek',
-  'Sajadah Panjang',
-  'Deadpool & Wolverine',
-  'Dune 2',
-  'Solo Leveling',
-  'Avatar',
-  'One Piece'
+  'Sajadah Panjang'
 ];
 
 export default function SearchModal({
@@ -250,6 +250,7 @@ export default function SearchModal({
                 <MovieCard
                   key={`${item.id}-${item.provider || 'gen'}`}
                   item={item}
+                  className="w-full"
                   onClick={onMovieClick}
                   onPlay={onPlayClick}
                   isWatchlisted={watchlistIds.has(String(item.id))}
