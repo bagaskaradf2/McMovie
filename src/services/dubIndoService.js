@@ -430,7 +430,7 @@ export const DubIndoService = {
    */
   async getMovieOrSeriesById(targetId) {
     if (!targetId) return null;
-    const cleanId = String(targetId).replace(/^dub_/, '').replace(/^dub_series_/, '');
+    const cleanId = String(targetId).replace(/^dub_(?:series_)?/, '');
 
     // 1. Check curated movies cache first (support rawId, dub_id, or tmdbId)
     if (curatedMoviesCache.length > 0) {
@@ -442,16 +442,18 @@ export const DubIndoService = {
       if (found) return found;
     }
 
-    // 2. Check series group cache
+    // 2. Check series group cache with exact id/seriesKey match FIRST so "moneyheist" never collides with "moneyheistkorea"
     try {
       const seriesList = await this.getSeries();
-      const foundSeries = seriesList.find(s =>
+      const exactSeries = seriesList.find(s =>
         String(s.id) === String(targetId) ||
         String(s.seriesKey || '') === cleanId ||
-        String(s.id).includes(cleanId) ||
         (s.tmdbId && String(s.tmdbId) === cleanId)
       );
-      if (foundSeries) return foundSeries;
+      if (exactSeries) return exactSeries;
+
+      const fuzzySeries = seriesList.find(s => String(s.id).includes(cleanId));
+      if (fuzzySeries) return fuzzySeries;
     } catch (e) {
       console.warn('Error checking series in getMovieOrSeriesById:', e);
     }
