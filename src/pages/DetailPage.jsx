@@ -352,10 +352,14 @@ export default function DetailPage({ type: propType }) {
   const cast = data?.credits?.cast?.slice(0, 8) || [];
   const similar = data?.similar?.results?.slice(0, 12) || [];
 
-  // Trailer
-  const trailer = data?.videos?.results?.find(
+  // Trailer (validated key & privacy-enhanced nocookie embed)
+  const rawTrailer = data?.videos?.results?.find(
     (v) => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser')
   );
+  const trailer =
+    rawTrailer && /^[A-Za-z0-9_-]{6,20}$/.test(String(rawTrailer.key || ''))
+      ? rawTrailer
+      : null;
 
   // Episodes List for Series: handle both Array and Number formats safely
   const rawEpisodes = item.isDubIndo
@@ -430,9 +434,11 @@ export default function DetailPage({ type: propType }) {
         {showTrailer && trailer ? (
           <div className="w-full h-full">
             <iframe
-              src={`https://www.youtube.com/embed/${trailer.key}?autoplay=1&rel=0`}
+              src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer.key)}?autoplay=1&rel=0`}
               title="Official Trailer"
               className="w-full h-full border-0"
+              referrerPolicy="strict-origin-when-cross-origin"
+              sandbox="allow-scripts allow-same-origin allow-presentation"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />

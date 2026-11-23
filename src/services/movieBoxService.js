@@ -10,7 +10,6 @@
  * - Sinetron & Series Indonesia Populer (Terbaik Itu Kamu, Bound by Promise, Main Belakang, Serigala Terakhir, dll)
  */
 
-import { StorageService } from './storageService';
 import { TmdbService } from './tmdbService';
 
 let cachedCatalog = null;

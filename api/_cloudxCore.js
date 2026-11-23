@@ -2,6 +2,7 @@
  * CloudX Direct Stream Extractor Core (Node.js ESM, zero external dependencies)
  * Scrapes active CloudX WordPress/DooPlay providers and unpacks direct .m3u8 / .mp4 / .vtt streams.
  */
+import { isBlockedHostnameSync, safeFetch } from './_security.js';
 
 const WEBSITE_JSON_URL = 'https://raw.githubusercontent.com/Asm0d3usX/CloudX/builds/Website.json';
 const USER_AGENT =
@@ -153,8 +154,15 @@ export async function getCloudXMirrors() {
       const json = await res.json();
       for (const [key, arr] of Object.entries(json || {})) {
         const candidate = Array.isArray(arr) ? arr[0] : null;
-        if (typeof candidate === 'string' && candidate.startsWith('http')) {
-          merged[key] = candidate.replace(/\/+$/, '');
+        if (typeof candidate === 'string' && candidate.startsWith('https://')) {
+          try {
+            const parsed = new URL(candidate);
+            if (!parsed.username && !parsed.password && !isBlockedHostnameSync(parsed.hostname)) {
+              merged[key] = candidate.replace(/\/+$/, '');
+            }
+          } catch {
+            // Skip malformed mirror URLs
+          }
         }
       }
     }
@@ -234,13 +242,16 @@ async function fetchText(url, { referer, method = 'GET', body, headers = {}, tim
     ...headers,
   };
 
-  const res = await fetch(url, {
-    method,
-    headers: reqHeaders,
-    body,
-    redirect: 'follow',
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const res = await safeFetch(
+    url,
+    {
+      method,
+      headers: reqHeaders,
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    },
+    3
+  );
   const text = await res.text();
   return { ok: res.ok, status: res.status, url: res.url || url, text };
 }
@@ -252,7 +263,16 @@ function normalizeEmbedHostUrl(rawUrl) {
 
   try {
     const parsed = new URL(u);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    if (parsed.username || parsed.password) {
+      return null;
+    }
     const host = parsed.hostname.toLowerCase();
+    if (isBlockedHostnameSync(host)) {
+      return null;
+    }
     if (BLOCKED_EMBED_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) {
       return null;
     }

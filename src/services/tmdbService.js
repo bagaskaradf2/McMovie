@@ -4,8 +4,6 @@
  * Netflix Indonesia releases, movies, TV series, anime, Asian dramas, and multi-search.
  */
 
-import { StorageService } from './storageService';
-
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
@@ -37,10 +35,6 @@ export function isCleanMediaItem(item, { allowUnreleased = false } = {}) {
 }
 
 function getApiKey() {
-  const userKey = StorageService.getSettings()?.tmdbApiKey;
-  if (userKey && userKey.trim().length > 10) {
-    return userKey.trim();
-  }
   return DEFAULT_KEYS[currentKeyIndex % DEFAULT_KEYS.length];
 }
 

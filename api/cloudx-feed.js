@@ -11,6 +11,7 @@ import {
   normalizeTitleForMatch,
   PROVIDER_LABELS,
 } from './_cloudxCore.js';
+import { evaluateCors, checkRateLimit, safeFetch } from './_security.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -139,12 +140,45 @@ async function enrichCandidateWithTmdb(candidate, keyIndex) {
   }
 }
 
-export async function GET() {
+export async function OPTIONS(request) {
+  const cors = evaluateCors(request);
+  if (!cors.allowed) {
+    return new Response(null, { status: 403, headers: cors.headers });
+  }
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...cors.headers,
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
+export async function GET(request) {
+  const cors = evaluateCors(request);
+  if (!cors.allowed) {
+    return Response.json(
+      { ok: false, count: 0, itemsCount: 0, providers: [], titles: [], items: [], error: 'Origin not allowed' },
+      { status: 403, headers: cors.headers }
+    );
+  }
+
+  if (request) {
+    const rl = checkRateLimit(request, 'cloudx-feed', 30, 60000);
+    if (!rl.allowed) {
+      return Response.json(
+        { ok: false, count: 0, itemsCount: 0, providers: [], titles: [], items: [], error: 'Too many requests' },
+        { status: 429, headers: { ...cors.headers, 'Retry-After': String(rl.retryAfterSec) } }
+      );
+    }
+  }
+
   const now = Date.now();
   if (feedCache.payload && now < feedCache.expiresAt) {
     return Response.json(feedCache.payload, {
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...cors.headers,
         'Cache-Control': 's-maxage=1800, stale-while-revalidate=3600',
       },
     });
@@ -172,15 +206,18 @@ export async function GET() {
     const pageResults = await Promise.all(
       jobs.map(async ({ provider, base, url }) => {
         try {
-          const res = await fetch(url, {
-            headers: {
-              'User-Agent': USER_AGENT,
-              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+          const res = await safeFetch(
+            url,
+            {
+              headers: {
+                'User-Agent': USER_AGENT,
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+              },
+              signal: AbortSignal.timeout(3000),
             },
-            redirect: 'follow',
-            signal: AbortSignal.timeout(3000),
-          });
+            3
+          );
           if (!res.ok) return { provider, articles: [] };
           const html = await res.text();
           return { provider, articles: parseSearchArticles(html, res.url || base) };
@@ -277,15 +314,15 @@ export async function GET() {
 
     return Response.json(payload, {
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...cors.headers,
         'Cache-Control': 's-maxage=1800, stale-while-revalidate=3600',
       },
     });
   } catch (err) {
-    console.error('[/api/cloudx-feed] Error:', err);
+    console.error('[/api/cloudx-feed] Error:', err.message);
     return Response.json(
-      { ok: false, count: 0, itemsCount: 0, providers: [], titles: [], items: [], error: err.message || 'Feed error' },
-      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
+      { ok: false, count: 0, itemsCount: 0, providers: [], titles: [], items: [], error: 'Feed temporarily unavailable' },
+      { status: 500, headers: cors.headers }
     );
   }
 }

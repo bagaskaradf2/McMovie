@@ -1,8 +1,18 @@
 /**
  * Vercel Serverless Function: /api/extract
  * Extracts direct .m3u8 / .mp4 streams and .vtt/.srt subtitles across CloudX providers.
+ * Enforces Origin-restricted CORS, per-IP rate limiting, strict query sanitization,
+ * and signs every generated /api/hls-proxy URL with HMAC-SHA256.
  */
 import { getCloudXMirrors, PROVIDER_PRIORITY, extractFromProvider } from './_cloudxCore.js';
+import {
+  evaluateCors,
+  checkRateLimit,
+  signProxyUrl,
+  sanitizeQueryText,
+  sanitizeYear,
+  clampInt,
+} from './_security.js';
 
 const EXTRACT_CACHE_TTL_MS = 15 * 60 * 1000;
 const EXTRACT_CACHE_MAX = 200;
@@ -24,13 +34,6 @@ function setCachedExtraction(key, payload) {
     if (oldestKey) extractCache.delete(oldestKey);
   }
   extractCache.set(key, { payload, expiresAt: Date.now() + EXTRACT_CACHE_TTL_MS });
-}
-
-function buildProxyUrl(targetUrl, referer, embedUrl) {
-  const params = new URLSearchParams({ url: targetUrl });
-  if (referer) params.set('ref', referer);
-  if (embedUrl) params.set('emb', embedUrl);
-  return `/api/hls-proxy?${params.toString()}`;
 }
 
 function streamScore(s) {
@@ -89,23 +92,56 @@ async function raceProvidersWithGrace(providerKeys, mirrors, params, graceMs = 1
   });
 }
 
+export async function OPTIONS(request) {
+  const cors = evaluateCors(request);
+  if (!cors.allowed) {
+    return new Response(null, { status: 403, headers: cors.headers });
+  }
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...cors.headers,
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
 export async function GET(request) {
+  const cors = evaluateCors(request);
+  if (!cors.allowed) {
+    return Response.json(
+      { ok: false, error: 'Origin not allowed', streams: [], subtitles: [] },
+      { status: 403, headers: cors.headers }
+    );
+  }
+
+  const rl = checkRateLimit(request, 'extract', 30, 60000);
+  if (!rl.allowed) {
+    return Response.json(
+      { ok: false, error: 'Too many requests', streams: [], subtitles: [] },
+      { status: 429, headers: { ...cors.headers, 'Retry-After': String(rl.retryAfterSec) } }
+    );
+  }
+
   try {
     const reqUrl = new URL(request.url);
-    const title = (reqUrl.searchParams.get('title') || '').trim();
-    const originalTitle = (reqUrl.searchParams.get('originalTitle') || '').trim();
-    const year = (reqUrl.searchParams.get('year') || '').trim();
+    const title = sanitizeQueryText(reqUrl.searchParams.get('title'), 150);
+    const originalTitle = sanitizeQueryText(reqUrl.searchParams.get('originalTitle'), 150);
+    const year = sanitizeYear(reqUrl.searchParams.get('year'));
     const type = reqUrl.searchParams.get('type') === 'tv' ? 'tv' : 'movie';
-    const season = parseInt(reqUrl.searchParams.get('season') || '1', 10) || 1;
-    const episode = parseInt(reqUrl.searchParams.get('episode') || '1', 10) || 1;
-    const tmdbId = (reqUrl.searchParams.get('tmdbId') || '').trim();
-    const hintProvider = (reqUrl.searchParams.get('provider') || '').toLowerCase().trim();
+    const season = clampInt(reqUrl.searchParams.get('season'), 1, 100, 1);
+    const episode = clampInt(reqUrl.searchParams.get('episode'), 1, 2000, 1);
+    const rawTmdb = (reqUrl.searchParams.get('tmdbId') || '').trim();
+    const tmdbId = /^\d{1,10}$/.test(rawTmdb) ? rawTmdb : '';
+    const rawHint = (reqUrl.searchParams.get('provider') || '').toLowerCase().trim();
+    const hintProvider = /^[a-z0-9]{1,20}$/.test(rawHint) ? rawHint : '';
     const forceRefresh = reqUrl.searchParams.get('refresh') === '1';
 
     if (!title && !originalTitle) {
       return Response.json(
         { ok: false, error: 'Missing required query parameter: title', streams: [], subtitles: [] },
-        { status: 400 }
+        { status: 400, headers: cors.headers }
       );
     }
 
@@ -117,7 +153,7 @@ export async function GET(request) {
       if (cached) {
         return Response.json(cached, {
           headers: {
-            'Access-Control-Allow-Origin': '*',
+            ...cors.headers,
             'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
           },
         });
@@ -159,7 +195,7 @@ export async function GET(request) {
       for (const sub of res.subtitles || []) {
         if (!sub.url || seenSubUrls.has(sub.url)) continue;
         seenSubUrls.add(sub.url);
-        const proxiedSub = buildProxyUrl(sub.url, sub.referer);
+        const proxiedSub = signProxyUrl(sub.url, sub.referer || '');
         subtitles.push({
           url: proxiedSub,
           rawUrl: sub.url,
@@ -169,7 +205,6 @@ export async function GET(request) {
       }
     }
 
-    // Rank all candidate streams best-first before deduplicating per provider+host
     rawStreams.sort((a, b) => streamScore(b) - streamScore(a));
 
     const seenProviderHost = new Set();
@@ -189,7 +224,7 @@ export async function GET(request) {
         id: `${s.provider}_${s.host}_${streams.length}`,
         label: `${pLabel} HD ${num}`,
         url: s.url,
-        proxyUrl: buildProxyUrl(s.url, s.referer, s.embedUrl),
+        proxyUrl: signProxyUrl(s.url, s.referer || '', s.embedUrl || ''),
         embedUrl: s.embedUrl || '',
         preferProxy: /tnmr\.org|\/stream\//i.test(s.url),
         type: s.type || 'hls',
@@ -199,7 +234,6 @@ export async function GET(request) {
       });
     }
 
-    // Prefer Indonesian / English subtitles first
     subtitles.sort((a, b) => {
       const rank = (l) => (l.lang === 'id' ? 0 : l.lang === 'en' ? 1 : 2);
       return rank(a) - rank(b);
@@ -219,15 +253,15 @@ export async function GET(request) {
 
     return Response.json(payload, {
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...cors.headers,
         'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
       },
     });
   } catch (err) {
-    console.error('[/api/extract] Unhandled error:', err);
+    console.error('[/api/extract] Unhandled error:', err.message);
     return Response.json(
-      { ok: false, error: err.message || 'Internal extraction error', streams: [], subtitles: [] },
-      { status: 500 }
+      { ok: false, error: 'Extraction temporarily unavailable', streams: [], subtitles: [] },
+      { status: 500, headers: cors.headers }
     );
   }
 }

@@ -194,8 +194,8 @@ export async function resolveDirectPlayableUrl(rawUrl) {
 /**
  * Generates alternative stream mirrors for high availability
  */
-export function getStreamMirrors(rawUrl, embedToken = null) {
-  if (!rawUrl && !embedToken) return [];
+export function getStreamMirrors(rawUrl) {
+  if (!rawUrl) return [];
   const mirrors = [];
 
   if (rawUrl && rawUrl.includes('uvideoweb')) {
@@ -231,17 +231,6 @@ export function getStreamMirrors(rawUrl, embedToken = null) {
       badge: 'Mirror 1080p',
       url: `https://files.indodub.my.id/${rel}`,
       isDirect: true,
-    });
-  }
-
-  // Official Dubbindo Web Player iframe mirror
-  if (embedToken) {
-    mirrors.push({
-      id: 'dub_embed',
-      name: '🇮🇩 Dubbing Indo (Web Player)',
-      badge: 'Web Player HD',
-      url: `https://www.dubbindo.site/embed/${embedToken}`,
-      isDirect: false,
     });
   }
 

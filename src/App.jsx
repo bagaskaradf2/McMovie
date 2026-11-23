@@ -426,8 +426,7 @@ export default function App() {
 
   const handleClearWatchlist = useCallback(() => {
     if (window.confirm('Kosongkan semua daftar Watchlist?')) {
-      localStorage.removeItem('mcmovies_watchlist');
-      setWatchlist([]);
+      setWatchlist(StorageService.clearWatchlist());
     }
   }, []);
 
@@ -438,8 +437,7 @@ export default function App() {
 
   const handleClearHistory = useCallback(() => {
     if (window.confirm('Kosongkan seluruh riwayat nonton?')) {
-      localStorage.removeItem('mcmovies_continue_watching');
-      setContinueWatching([]);
+      setContinueWatching(StorageService.clearContinueWatching());
     }
   }, []);
 

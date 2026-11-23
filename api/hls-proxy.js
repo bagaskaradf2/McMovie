@@ -1,9 +1,20 @@
 /**
  * Vercel Serverless Function: /api/hls-proxy
- * Streaming proxy for CloudX .m3u8 manifests, .ts/.m4s media segments, and .vtt/.srt subtitles.
- * Includes self-healing per-container token refresh so IP-bound CDN tokens stay valid across Vercel instances.
+ * Signed streaming proxy for CloudX .m3u8 manifests, .ts/.m4s media segments, and .vtt/.srt subtitles.
+ * Protected by HMAC-SHA256 signatures, strict IP/DNS/redirect SSRF defense, origin-restricted CORS,
+ * sliding-window rate limiting, and non-document media Content-Type enforcement.
  */
 import { extractDirectMediaFromHost } from './_cloudxCore.js';
+import {
+  evaluateCors,
+  checkRateLimit,
+  verifySignedProxyParams,
+  signProxyUrl,
+  assertPublicHttpUrl,
+  safeFetch,
+  sanitizeHeaderValue,
+  readTextBounded,
+} from './_security.js';
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -12,6 +23,9 @@ const TOKEN_TTL_MS = 10 * 60 * 1000;
 const TOKEN_CACHE_MAX = 150;
 const containerTokenCache = new Map();
 const inflightRefresh = new Map();
+
+const DANGEROUS_CONTENT_TYPE_REGEX =
+  /(text\/html|application\/xhtml|image\/svg|javascript|ecmascript|text\/xml|application\/xml)/i;
 
 function getCachedToken(embedUrl) {
   const entry = containerTokenCache.get(embedUrl);
@@ -39,7 +53,7 @@ async function refreshContainerToken(embedUrl, ref) {
         candidates[0];
       if (!best?.url) return null;
 
-      const fresh = new URL(best.url);
+      const fresh = await assertPublicHttpUrl(best.url);
       const tokenEntry = {
         origin: fresh.origin,
         search: fresh.search,
@@ -84,30 +98,6 @@ function applyContainerToken(targetUrlObj, tokenInfo) {
   }
 }
 
-function isBlockedPrivateHost(hostname) {
-  const h = (hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  if (!h) return true;
-  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h.endsWith('.local')) return true;
-
-  // Reject private IPv4 ranges
-  const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4) {
-    const [a, b] = [parseInt(ipv4[1], 10), parseInt(ipv4[2], 10)];
-    if (a === 10 || a === 127 || a === 0) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-  }
-  return false;
-}
-
-function wrapProxyUrl(absoluteUrl, ref, emb) {
-  const params = new URLSearchParams({ url: absoluteUrl });
-  if (ref) params.set('ref', ref);
-  if (emb) params.set('emb', emb);
-  return `/api/hls-proxy?${params.toString()}`;
-}
-
 function rewriteM3u8Manifest(manifestText, baseUrl, ref, emb) {
   const lines = manifestText.split(/\r?\n/);
   return lines
@@ -116,11 +106,10 @@ function rewriteM3u8Manifest(manifestText, baseUrl, ref, emb) {
       if (!line) return rawLine;
 
       if (line.startsWith('#')) {
-        // Rewrite URI="..." inside EXT-X-KEY, EXT-X-MAP, EXT-X-MEDIA, EXT-X-I-FRAME-STREAM-INF, etc.
         return rawLine.replace(/URI="([^"]+)"/gi, (_, uriVal) => {
           try {
             const abs = new URL(uriVal, baseUrl).href;
-            return `URI="${wrapProxyUrl(abs, ref, emb)}"`;
+            return `URI="${signProxyUrl(abs, ref, emb)}"`;
           } catch {
             return `URI="${uriVal}"`;
           }
@@ -129,7 +118,7 @@ function rewriteM3u8Manifest(manifestText, baseUrl, ref, emb) {
 
       try {
         const abs = new URL(line, baseUrl).href;
-        return wrapProxyUrl(abs, ref, emb);
+        return signProxyUrl(abs, ref, emb);
       } catch {
         return rawLine;
       }
@@ -145,11 +134,15 @@ function convertSrtToVtt(srtText) {
   return clean.startsWith('WEBVTT') ? clean : `WEBVTT\n\n${clean}`;
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(request) {
+  const cors = evaluateCors(request);
+  if (!cors.allowed) {
+    return new Response(null, { status: 403, headers: cors.headers });
+  }
   return new Response(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      ...cors.headers,
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Access-Control-Allow-Headers': 'Range, Content-Type',
     },
@@ -157,30 +150,62 @@ export async function OPTIONS() {
 }
 
 export async function GET(request) {
+  const cors = evaluateCors(request);
+  if (!cors.allowed) {
+    return Response.json({ error: 'Origin not allowed' }, { status: 403, headers: cors.headers });
+  }
+
+  const rl = checkRateLimit(request, 'hls-proxy', 300, 60000);
+  if (!rl.allowed) {
+    return Response.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { ...cors.headers, 'Retry-After': String(rl.retryAfterSec) } }
+    );
+  }
+
+  const baseSecHeaders = {
+    ...cors.headers,
+    'Content-Security-Policy': 'sandbox',
+  };
+
   try {
     const reqUrl = new URL(request.url);
-    const targetRaw = reqUrl.searchParams.get('url');
+    const targetRaw = reqUrl.searchParams.get('url') || '';
     const refParam = reqUrl.searchParams.get('ref') || '';
     const originParam = reqUrl.searchParams.get('origin') || '';
     const embParam = reqUrl.searchParams.get('emb') || '';
+    const expParam = reqUrl.searchParams.get('exp') || '';
+    const sigParam = reqUrl.searchParams.get('sig') || '';
 
     if (!targetRaw) {
-      return Response.json({ error: 'Missing required url parameter' }, { status: 400 });
+      return Response.json({ error: 'Missing required url parameter' }, { status: 400, headers: baseSecHeaders });
+    }
+
+    const sigCheck = verifySignedProxyParams({
+      url: targetRaw,
+      ref: refParam,
+      emb: embParam,
+      origin: originParam,
+      exp: expParam,
+      sig: sigParam,
+    });
+    if (!sigCheck.ok) {
+      return Response.json({ error: 'Forbidden' }, { status: 403, headers: baseSecHeaders });
     }
 
     let parsedTarget;
     try {
-      parsedTarget = new URL(targetRaw);
+      parsedTarget = await assertPublicHttpUrl(targetRaw);
     } catch {
-      return Response.json({ error: 'Invalid target URL' }, { status: 400 });
+      return Response.json({ error: 'Blocked target host' }, { status: 403, headers: baseSecHeaders });
     }
 
-    if (parsedTarget.protocol !== 'http:' && parsedTarget.protocol !== 'https:') {
-      return Response.json({ error: 'Disallowed URL protocol' }, { status: 403 });
-    }
-
-    if (isBlockedPrivateHost(parsedTarget.hostname)) {
-      return Response.json({ error: 'Blocked private or loopback host' }, { status: 403 });
+    if (embParam) {
+      try {
+        await assertPublicHttpUrl(embParam);
+      } catch {
+        return Response.json({ error: 'Blocked embed host' }, { status: 403, headers: baseSecHeaders });
+      }
     }
 
     const upstreamHeaders = {
@@ -193,16 +218,19 @@ export async function GET(request) {
       upstreamHeaders['Accept-Encoding'] = 'identity';
     }
 
-    if (refParam) {
-      upstreamHeaders.Referer = refParam;
-    }
-    if (originParam) {
-      upstreamHeaders.Origin = originParam;
+    const safeRef = sanitizeHeaderValue(refParam);
+    if (safeRef && /^https?:\/\//i.test(safeRef)) {
+      upstreamHeaders.Referer = safeRef;
     }
 
-    const rangeHeader = request.headers.get('range');
-    if (rangeHeader) {
-      upstreamHeaders.Range = rangeHeader;
+    const safeOrigin = sanitizeHeaderValue(originParam);
+    if (safeOrigin && /^https?:\/\//i.test(safeOrigin)) {
+      upstreamHeaders.Origin = safeOrigin;
+    }
+
+    const safeRange = sanitizeHeaderValue(request.headers.get('range'), 100);
+    if (safeRange && /^bytes=\d*-\d*(,\s*\d*-\d*)*$/i.test(safeRange)) {
+      upstreamHeaders.Range = safeRange;
     }
 
     let activeTarget = parsedTarget;
@@ -210,52 +238,75 @@ export async function GET(request) {
       const cachedToken = getCachedToken(embParam);
       if (cachedToken) {
         activeTarget = applyContainerToken(parsedTarget, cachedToken);
+        try {
+          activeTarget = await assertPublicHttpUrl(activeTarget.href);
+        } catch {
+          activeTarget = parsedTarget;
+        }
       }
     }
 
-    let upstream = await fetch(activeTarget.href, {
-      method: 'GET',
-      headers: upstreamHeaders,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(15000),
-    });
+    let upstream = await safeFetch(
+      activeTarget.href,
+      {
+        method: 'GET',
+        headers: upstreamHeaders,
+        signal: AbortSignal.timeout(15000),
+      },
+      4
+    );
 
     if (upstream.status === 403 && embParam) {
-      const freshToken = await refreshContainerToken(embParam, refParam);
+      if (upstream.body) upstream.body.cancel().catch(() => {});
+      const freshToken = await refreshContainerToken(embParam, safeRef);
       if (freshToken) {
-        activeTarget = applyContainerToken(parsedTarget, freshToken);
-        upstream = await fetch(activeTarget.href, {
-          method: 'GET',
-          headers: upstreamHeaders,
-          redirect: 'follow',
-          signal: AbortSignal.timeout(15000),
-        });
+        const refreshedUrl = applyContainerToken(parsedTarget, freshToken);
+        activeTarget = await assertPublicHttpUrl(refreshedUrl.href);
+        upstream = await safeFetch(
+          activeTarget.href,
+          {
+            method: 'GET',
+            headers: upstreamHeaders,
+            signal: AbortSignal.timeout(15000),
+          },
+          4
+        );
       }
     }
 
     if (!upstream.ok && upstream.status !== 206) {
+      if (upstream.body) upstream.body.cancel().catch(() => {});
       console.error(`[/api/hls-proxy] Upstream HTTP ${upstream.status} for ${activeTarget.hostname}`);
       return new Response(`Upstream error HTTP ${upstream.status}`, {
         status: upstream.status,
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: baseSecHeaders,
       });
     }
 
     const finalUrl = upstream.url || activeTarget.href;
     const contentType = (upstream.headers.get('content-type') || '').toLowerCase();
-    const isSubtitleUrl = /\.(vtt|srt)(\?|$)/i.test(finalUrl) || contentType.includes('text/vtt') || contentType.includes('subrip');
+
+    // Never proxy active web documents, SVGs, or scripts back to the browser
+    if (DANGEROUS_CONTENT_TYPE_REGEX.test(contentType)) {
+      if (upstream.body) upstream.body.cancel().catch(() => {});
+      return Response.json({ error: 'Unsupported media type' }, { status: 415, headers: baseSecHeaders });
+    }
+
+    const isSubtitleUrl =
+      /\.(vtt|srt)(\?|$)/i.test(finalUrl) || contentType.includes('text/vtt') || contentType.includes('subrip');
 
     if (isSubtitleUrl) {
-      const subText = await upstream.text();
-      const vttBody = /\.srt(\?|$)/i.test(finalUrl) || !subText.trim().startsWith('WEBVTT')
-        ? convertSrtToVtt(subText)
-        : subText;
+      const subText = await readTextBounded(upstream, 5 * 1024 * 1024);
+      const vttBody =
+        /\.srt(\?|$)/i.test(finalUrl) || !subText.trim().startsWith('WEBVTT')
+          ? convertSrtToVtt(subText)
+          : subText;
 
       return new Response(vttBody, {
         status: 200,
         headers: {
+          ...baseSecHeaders,
           'Content-Type': 'text/vtt; charset=utf-8',
-          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'public, max-age=300',
         },
       });
@@ -267,31 +318,23 @@ export async function GET(request) {
       /\.m3u8(\?|$)/i.test(finalUrl);
 
     if (isM3u8Header) {
-      const manifestText = await upstream.text();
+      const manifestText = await readTextBounded(upstream, 5 * 1024 * 1024);
       if (manifestText.trimStart().startsWith('#EXTM3U')) {
-        const rewritten = rewriteM3u8Manifest(manifestText, finalUrl, refParam, embParam);
+        const rewritten = rewriteM3u8Manifest(manifestText, finalUrl, safeRef, embParam);
         return new Response(rewritten, {
           status: 200,
           headers: {
+            ...baseSecHeaders,
             'Content-Type': 'application/vnd.apple.mpegurl',
-            'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'public, max-age=30',
           },
         });
       }
-      // Fall through if upstream was actually non-M3U8 text/binary
-      return new Response(manifestText, {
-        status: upstream.status,
-        headers: {
-          'Content-Type': contentType || 'application/octet-stream',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
+      return Response.json({ error: 'Invalid media playlist' }, { status: 415, headers: baseSecHeaders });
     }
 
-    // Check first chunk when content-type is ambiguous text/plain or octet-stream on playlist URLs
     const outHeaders = new Headers({
-      'Access-Control-Allow-Origin': '*',
+      ...baseSecHeaders,
       'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
       'Cache-Control': 'public, max-age=300',
     });
@@ -310,10 +353,10 @@ export async function GET(request) {
       headers: outHeaders,
     });
   } catch (err) {
-    console.error('[/api/hls-proxy] Proxy failure:', err);
-    return new Response(`Proxy error: ${err.message}`, {
+    console.error('[/api/hls-proxy] Proxy failure:', err.message);
+    return new Response('Upstream proxy error', {
       status: 502,
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: baseSecHeaders,
     });
   }
 }
