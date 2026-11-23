@@ -54,11 +54,96 @@ function convertSrtToVttClient(text) {
   return clean.trimStart().startsWith('WEBVTT') ? clean : `WEBVTT\n\n${clean}`;
 }
 
+const SEGMENT_PRIORITY = { recap: 0, intro: 1, credits: 2 };
+
+function resolveSkipSegments(skipSegments, duration, isSeries, hasNextEpisode) {
+  if (!Number.isFinite(duration) || duration <= 0 || !Array.isArray(skipSegments) || skipSegments.length === 0) {
+    return [];
+  }
+
+  const introRecaps = [];
+  for (const seg of skipSegments) {
+    if (!seg || (seg.type !== 'recap' && seg.type !== 'intro')) continue;
+    if (seg.endSec == null || !Number.isFinite(seg.endSec)) continue;
+    const effectiveEnd = Math.min(seg.endSec, duration);
+    if (seg.startSec > duration * 0.55) continue;
+    if (effectiveEnd - seg.startSec < 5) continue;
+    if (effectiveEnd >= duration - 10) continue;
+
+    introRecaps.push({
+      key: `${seg.type}_${Math.round(seg.startSec)}_${Math.round(effectiveEnd)}`,
+      type: seg.type,
+      startSec: seg.startSec,
+      effectiveEnd,
+      action: 'seek',
+      label: seg.type === 'recap' ? 'Lewati Rekap' : 'Lewati Intro',
+      shortLabel: seg.type === 'recap' ? 'Rekap' : 'Intro',
+      osd: seg.type === 'recap' ? 'Melewati Rekap' : 'Melewati Intro',
+    });
+  }
+
+  const creditSegments = [];
+  for (const seg of skipSegments) {
+    if (!seg || seg.type !== 'credits') continue;
+    if (seg.startSec < duration * 0.65) continue;
+    const effectiveEnd = seg.endSec != null ? Math.min(seg.endSec, duration) : duration;
+    if (effectiveEnd <= seg.startSec + 3) continue;
+    const overlapsIntro = introRecaps.some((o) => seg.startSec < o.effectiveEnd && effectiveEnd > o.startSec);
+    if (overlapsIntro) continue;
+
+    let action = '';
+    let label = '';
+    let osd = '';
+    if (isSeries && hasNextEpisode) {
+      action = 'next_episode';
+      label = 'Episode Berikutnya';
+      osd = 'Memutar Episode Berikutnya';
+    } else if (seg.endSec != null && effectiveEnd < duration - 10 && effectiveEnd - seg.startSec >= 10) {
+      action = 'seek';
+      label = 'Lewati Credits';
+      osd = 'Melewati Credits';
+    } else {
+      continue;
+    }
+
+    creditSegments.push({
+      key: `credits_${Math.round(seg.startSec)}_${Math.round(effectiveEnd)}`,
+      type: 'credits',
+      startSec: seg.startSec,
+      effectiveEnd,
+      action,
+      label,
+      shortLabel: 'Credits',
+      osd,
+    });
+  }
+
+  const candidates = [...introRecaps, ...creditSegments].sort((a, b) => {
+    if (Math.abs(a.startSec - b.startSec) > 0.5) return a.startSec - b.startSec;
+    return SEGMENT_PRIORITY[a.type] - SEGMENT_PRIORITY[b.type];
+  });
+
+  const deduped = [];
+  for (const seg of candidates) {
+    const prev = deduped[deduped.length - 1];
+    if (prev && seg.startSec < prev.effectiveEnd) {
+      if (SEGMENT_PRIORITY[seg.type] < SEGMENT_PRIORITY[prev.type]) {
+        deduped[deduped.length - 1] = seg;
+      }
+      continue;
+    }
+    deduped.push(seg);
+  }
+
+  return deduped;
+}
+
 export default function CinemaPlayer({
   streams = [],
   activeStreamIndex = 0,
   onSelectStream,
   subtitles = [],
+  skipSegments = [],
   isExtracting = false,
   extractError = null,
   onRetryExtract,
@@ -123,6 +208,7 @@ export default function CinemaPlayer({
   const [uploadedSubs, setUploadedSubs] = useState([]);
   const [activeSubIndex, setActiveSubIndex] = useState(() => (subtitles.length > 0 ? 0 : -1));
   const [hoverSeek, setHoverSeek] = useState(null); // { pct, time }
+  const [dismissedSegKeys, setDismissedSegKeys] = useState(() => new Set());
 
   // Unified Floating Panel State
   const [panelTab, setPanelTab] = useState(null); // null | 'source' | 'quality' | 'subtitles' | 'playback'
@@ -188,6 +274,11 @@ export default function CinemaPlayer({
     }
   }, [activeSubIndex, allSubtitles, activeStreamIndex]);
 
+  // Reset dismissed skip segments whenever fetched segment list changes
+  useEffect(() => {
+    setDismissedSegKeys(new Set());
+  }, [skipSegments]);
+
   // Apply Data Saver (cap HLS auto quality <= 720p)
   useEffect(() => {
     const hls = hlsRef.current;
@@ -213,6 +304,10 @@ export default function CinemaPlayer({
     setStreamFailed(false);
     setQualityLevels([]);
     setActiveLevel(-1);
+    setCurrentTime(0);
+    setDuration(0);
+    setBufferedTime(0);
+    setDismissedSegKeys(new Set());
     mediaRecoveryRef.current = 0;
     setIsBuffering(true);
 
@@ -385,6 +480,7 @@ export default function CinemaPlayer({
     const newTime = parseFloat(e.target.value);
     videoRef.current.currentTime = newTime;
     setCurrentTime(newTime);
+    setDismissedSegKeys(new Set());
   };
 
   const handleSpeedChange = (speed) => {
@@ -672,6 +768,77 @@ export default function CinemaPlayer({
   const playedPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const bufferedPct = duration > 0 ? Math.min(100, (bufferedTime / duration) * 100) : 0;
 
+  const resolvedSegments = useMemo(
+    () => resolveSkipSegments(skipSegments, duration, isSeries, hasNextEpisode),
+    [skipSegments, duration, isSeries, hasNextEpisode]
+  );
+
+  const activeSkipSegment = useMemo(() => {
+    if (
+      !prefs.showSkipIntro ||
+      !Number.isFinite(duration) ||
+      duration <= 0 ||
+      isScreenLocked ||
+      Boolean(panelTab) ||
+      showEpisodesDrawer
+    ) {
+      return null;
+    }
+
+    return (
+      resolvedSegments.find((seg) => {
+        if (dismissedSegKeys.has(seg.key)) return false;
+        const exitThreshold = seg.action === 'next_episode' ? duration - 0.5 : seg.effectiveEnd - 1.5;
+        return currentTime >= seg.startSec && currentTime < exitThreshold;
+      }) || null
+    );
+  }, [
+    prefs.showSkipIntro,
+    duration,
+    isScreenLocked,
+    panelTab,
+    showEpisodesDrawer,
+    resolvedSegments,
+    dismissedSegKeys,
+    currentTime,
+  ]);
+
+  const hoveredSegment = useMemo(() => {
+    if (!hoverSeek || resolvedSegments.length === 0) return null;
+    return (
+      resolvedSegments.find(
+        (seg) => hoverSeek.time >= seg.startSec && hoverSeek.time <= seg.effectiveEnd
+      ) || null
+    );
+  }, [hoverSeek, resolvedSegments]);
+
+  const handleSkipSegment = useCallback(
+    (seg) => {
+      if (!seg || isScreenLocked) return;
+
+      setDismissedSegKeys((prev) => {
+        const next = new Set(prev);
+        next.add(seg.key);
+        return next;
+      });
+
+      if (seg.action === 'next_episode' && onNextEpisode) {
+        flashOsd(seg.osd);
+        onNextEpisode();
+        return;
+      }
+
+      const video = videoRef.current;
+      if (!video) return;
+      const vidDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : duration;
+      const target = Math.min(seg.effectiveEnd + 0.4, Math.max(0, vidDuration - 1));
+      video.currentTime = target;
+      setCurrentTime(target);
+      flashOsd(seg.osd);
+    },
+    [isScreenLocked, onNextEpisode, duration, flashOsd]
+  );
+
   const filteredSources = useMemo(() => {
     return streams
       .map((s, idx) => ({ ...s, originalIndex: idx }))
@@ -832,6 +999,12 @@ export default function CinemaPlayer({
             className={`mc-player-video w-full h-full ${videoFitClass} bg-black transition-all duration-200`}
             onWaiting={() => setIsBuffering(true)}
             onCanPlay={() => setIsBuffering(false)}
+            onLoadedMetadata={() => {
+              const v = videoRef.current;
+              if (v && Number.isFinite(v.duration) && v.duration > 0) {
+                setDuration(v.duration);
+              }
+            }}
             onLoadedData={() => setIsBuffering(false)}
             onPlaying={() => {
               setIsBuffering(false);
@@ -1082,7 +1255,7 @@ export default function CinemaPlayer({
 
             {/* Bottom HUD + Floating Control Popover */}
             <div className="relative z-30 px-4 sm:px-7 pb-4 sm:pb-6 pt-10 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-auto mt-auto">
-              {/* Bottom-Left Info Overlay + Right-Aligned Skip Intro Pill */}
+              {/* Bottom-Left Info Overlay */}
               <div className="flex items-end justify-between gap-4 mb-3">
                 <div className="max-w-xl min-w-0">
                   <span className="block text-[10px] font-black tracking-[0.18em] text-emerald-400 uppercase">
@@ -1120,19 +1293,6 @@ export default function CinemaPlayer({
                     </>
                   )}
                 </div>
-
-                {prefs.showSkipIntro && duration > 180 && currentTime < 300 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      skipTime(85, 'Melewati Intro (+85 dtk)');
-                    }}
-                    className="flex-none px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-black text-xs font-bold shadow-2xl flex items-center gap-1.5 transition-all active:scale-95"
-                  >
-                    <span>Lewati Intro</span>
-                    <FastForward className="w-3.5 h-3.5 fill-current" />
-                  </button>
-                )}
               </div>
 
               {/* Buffered + Played Seekbar with Hover Timestamp Preview */}
@@ -1152,10 +1312,11 @@ export default function CinemaPlayer({
                 >
                   {hoverSeek && duration > 0 && (
                     <div
-                      className="hidden sm:block absolute -top-8 -translate-x-1/2 px-2 py-0.5 rounded-md bg-black/90 border border-white/15 text-[11px] font-semibold tabular-nums text-white pointer-events-none shadow-lg"
+                      className="hidden sm:block absolute -top-8 -translate-x-1/2 px-2 py-0.5 rounded-md bg-black/90 border border-white/15 text-[11px] font-semibold tabular-nums text-white pointer-events-none shadow-lg whitespace-nowrap"
                       style={{ left: `${hoverSeek.pct}%` }}
                     >
                       {formatTime(hoverSeek.time)}
+                      {hoveredSegment ? ` • ${hoveredSegment.shortLabel}` : ''}
                     </div>
                   )}
 
@@ -1164,8 +1325,24 @@ export default function CinemaPlayer({
                       className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
                       style={{ width: `${bufferedPct}%` }}
                     />
+                    {duration > 0 &&
+                      resolvedSegments.map((seg) => {
+                        const leftPct = Math.max(0, Math.min(100, (seg.startSec / duration) * 100));
+                        const widthPct = Math.max(
+                          0.5,
+                          Math.min(100 - leftPct, ((seg.effectiveEnd - seg.startSec) / duration) * 100)
+                        );
+                        const colorClass = seg.type === 'credits' ? 'bg-amber-400/75' : 'bg-sky-400/80';
+                        return (
+                          <div
+                            key={seg.key}
+                            className={`absolute inset-y-0 ${colorClass} pointer-events-none z-[1]`}
+                            style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                          />
+                        );
+                      })}
                     <div
-                      className="absolute inset-y-0 left-0 rounded-full"
+                      className="absolute inset-y-0 left-0 rounded-full z-[2]"
                       style={progressFillStyle}
                     />
                   </div>
@@ -1340,6 +1517,31 @@ export default function CinemaPlayer({
               </div>
             </div>
           </div>
+
+          {/* FLOATING SKIP INTRO / RECAP / CREDITS PILL (Independent of HUD fade, hidden when panel opens) */}
+          {activeSkipSegment && (
+            <div
+              className={`absolute right-4 sm:right-7 z-40 transition-all duration-300 pointer-events-auto ${
+                showControls || !isPlaying ? 'bottom-28 sm:bottom-32' : 'bottom-6 sm:bottom-8'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSkipSegment(activeSkipSegment);
+                }}
+                className="px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-black text-xs font-bold shadow-2xl border border-white/20 flex items-center gap-1.5 transition-all active:scale-95"
+              >
+                <span>{activeSkipSegment.label}</span>
+                {activeSkipSegment.action === 'next_episode' ? (
+                  <SkipForward className="w-3.5 h-3.5 fill-current" />
+                ) : (
+                  <FastForward className="w-3.5 h-3.5 fill-current" />
+                )}
+              </button>
+            </div>
+          )}
 
           {/* UNIFIED FLOATING 4-TAB SETTINGS POPOVER / BOTTOM SHEET */}
           {panelTab && (
@@ -1736,7 +1938,7 @@ export default function CinemaPlayer({
                         <div>
                           <p className="font-semibold text-white">Tombol Lewati Intro</p>
                           <p className="text-[10px] text-zinc-400">
-                            Tampilkan pintasan lewati intro di awal video
+                            Deteksi otomatis intro, rekap & credits asli bila tersedia
                           </p>
                         </div>
                         <span

@@ -17,6 +17,7 @@ import { DubIndoService } from '../services/dubIndoService';
 import { MovieBoxService } from '../services/movieBoxService';
 import { CloudXService } from '../services/cloudXService';
 import { StorageService } from '../services/storageService';
+import { SkipSegmentsService } from '../services/skipSegmentsService';
 import CinemaPlayer from '../components/CinemaPlayer';
 import MovieCard from '../components/MovieCard';
 
@@ -89,6 +90,7 @@ export default function WatchPage({
   const [extractError, setExtractError] = useState(null);
   const [extractNonce, setExtractNonce] = useState(0);
   const [titleLogoUrl, setTitleLogoUrl] = useState(null);
+  const [skipSegments, setSkipSegments] = useState([]);
   const [activeStreamIndex, setActiveStreamIndex] = useState(0);
 
   const [isTheaterMode, setIsTheaterMode] = useState(false);
@@ -333,6 +335,33 @@ export default function WatchPage({
       cancelled = true;
     };
   }, [item?.tmdbId, propId, isSeries]);
+
+  // Fetch verified real intro/recap/credits timestamps non-blockingly
+  const resolvedSegTmdbId = item?.tmdbId || (item && /^\d+$/.test(String(propId)) ? propId : null);
+  useEffect(() => {
+    setSkipSegments([]);
+    if (!resolvedSegTmdbId) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    SkipSegmentsService.getSegments({
+      tmdbId: resolvedSegTmdbId,
+      isSeries,
+      season: currentSeason,
+      episode: currentEpisode,
+      signal: controller.signal,
+    })
+      .then((segs) => {
+        if (!cancelled) setSkipSegments(segs);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [resolvedSegTmdbId, isSeries, currentSeason, currentEpisode]);
 
   // 2. Automatically extract direct CloudX .m3u8/.mp4 streams via /api/extract for pure native playback
   useEffect(() => {
@@ -656,6 +685,7 @@ export default function WatchPage({
           activeStreamIndex={activeStreamIndex}
           onSelectStream={(idx) => setActiveStreamIndex(idx)}
           subtitles={cloudXSubtitles}
+          skipSegments={skipSegments}
           isExtracting={isExtracting}
           extractError={extractError}
           onRetryExtract={() => setExtractNonce((n) => n + 1)}
