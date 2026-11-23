@@ -783,15 +783,15 @@ export default function CinemaPlayer({
 
             {/* Bottom Info + Seekbar + Controls */}
             <div className="relative z-30 p-3 sm:p-5 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-auto space-y-2.5 mt-auto">
-              {/* Info overlay (Desktop & tablet) */}
-              <div className="hidden md:block max-w-xl">
-                <span className="text-[10px] font-black tracking-[0.18em] text-emerald-400 uppercase">
+              {/* Info overlay */}
+              <div className="max-w-xl">
+                <span className="block text-[10px] font-black tracking-[0.18em] text-emerald-400 uppercase">
                   YOU'RE WATCHING
                 </span>
-                <h3 className="text-lg font-black text-white leading-tight uppercase tracking-tight line-clamp-1">
+                <h3 className="hidden sm:block text-sm md:text-lg font-black text-white leading-tight uppercase tracking-tight line-clamp-1">
                   {title}
                 </h3>
-                <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">
+                <p className="hidden md:block text-xs text-zinc-400 line-clamp-1 mt-0.5">
                   {year}{rating ? ` • ★ ${rating}` : ''}{runtime ? ` • ${runtime}` : ''}{synopsis ? ` • ${synopsis}` : ''}
                 </p>
               </div>

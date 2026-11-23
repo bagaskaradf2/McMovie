@@ -564,7 +564,7 @@ export default function DetailPage({ type: propType }) {
                 Sinopsis
               </h3>
               <p className="max-w-3xl text-sm sm:text-[15px] text-zinc-300 leading-relaxed">
-                {data.overview || data.description || 'Sinopsis belum tersedia untuk tayangan ini.'}
+                {(data.overview || data.description || 'Sinopsis belum tersedia untuk tayangan ini.').replace(/\s*—\s*/g, ' - ')}
               </p>
             </div>
           </div>
@@ -715,7 +715,7 @@ export default function DetailPage({ type: propType }) {
                           {epNum}. {epTitle}
                         </h4>
                         <p className="mt-1 text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
-                          {ep.overview || 'Tonton episode ini sekarang dalam kualitas HD.'}
+                          {(ep.overview || 'Tonton episode ini sekarang dalam kualitas HD.').replace(/\s*—\s*/g, ' - ')}
                         </p>
                       </div>
                     </div>
