@@ -296,12 +296,17 @@ export default function CinemaPlayer({
     }
   }, [prefs.dataSaver, qualityLevels]);
 
+  // Clear failure lock whenever extraction restarts or active stream changes so <video> remounts cleanly
+  useEffect(() => {
+    setStreamFailed(false);
+  }, [activeStream?.url, activeStream?.proxyUrl, activeStreamIndex, isExtracting]);
+
   // Initialize / switch HLS.js or direct MP4 playback
   useEffect(() => {
+    if (streamFailed) return;
     const video = videoRef.current;
     if (!video || !activeStream) return;
 
-    setStreamFailed(false);
     setQualityLevels([]);
     setActiveLevel(-1);
     setCurrentTime(0);
@@ -420,7 +425,7 @@ export default function CinemaPlayer({
         hlsRef.current = null;
       }
     };
-  }, [activeStream?.url, activeStream?.proxyUrl, activeStream?.type, activeStream?.preferProxy]);
+  }, [activeStream?.url, activeStream?.proxyUrl, activeStream?.type, activeStream?.preferProxy, streamFailed]);
 
   const scheduleHideControls = useCallback(() => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
