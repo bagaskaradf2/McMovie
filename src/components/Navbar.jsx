@@ -1,11 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import {
   Search,
   Bookmark,
   History,
-  Menu,
-  X
+  Home,
+  Film,
+  Tv,
+  Flame,
+  Sparkles,
+  Mic,
 } from 'lucide-react';
+
+const NAV_ITEMS = [
+  { id: 'home', label: 'Beranda', shortLabel: 'Home', Icon: Home },
+  { id: 'movies', label: 'Film', shortLabel: 'Film', Icon: Film },
+  { id: 'series', label: 'Series', shortLabel: 'Series', Icon: Tv },
+  { id: 'indonesia', label: 'Indonesia', shortLabel: 'Indo', Icon: Flame },
+  { id: 'asia', label: 'Asia', shortLabel: 'Asia', Icon: Sparkles },
+  { id: 'dubindo', label: 'Dub Indo', shortLabel: 'Dub', Icon: Mic },
+];
 
 export default function Navbar({
   activeTab = 'home',
@@ -16,102 +29,129 @@ export default function Navbar({
   watchlistCount = 0,
   historyCount = 0,
 }) {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navContainerRef = useRef(null);
+  const tabRefs = useRef(new Map());
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, visible: false });
+
+  const updateIndicator = useCallback(() => {
+    const container = navContainerRef.current;
+    const activeEl = tabRefs.current.get(activeTab);
+    if (!container || !activeEl) {
+      setIndicator((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+      return;
+    }
+    const left = activeEl.offsetLeft;
+    const width = activeEl.offsetWidth;
+    setIndicator({ left, width, visible: true });
+  }, [activeTab]);
+
+  useLayoutEffect(() => {
+    updateIndicator();
+    const raf = requestAnimationFrame(updateIndicator);
+    return () => cancelAnimationFrame(raf);
+  }, [updateIndicator]);
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    const onResize = () => updateIndicator();
+    window.addEventListener('resize', onResize);
 
-  const navItems = [
-    { id: 'home', label: 'Beranda' },
-    { id: 'movies', label: 'Film' },
-    { id: 'series', label: 'Series' },
-    { id: 'indonesia', label: 'Indonesia & Netflix', badge: String(new Date().getFullYear()) },
-    { id: 'asia', label: 'Anime & Asia' },
-    { id: 'dubindo', label: 'Dub Indo' },
-  ];
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(updateIndicator).catch(() => {});
+    }
+
+    let ro;
+    if (typeof ResizeObserver !== 'undefined' && navContainerRef.current) {
+      ro = new ResizeObserver(updateIndicator);
+      ro.observe(navContainerRef.current);
+      tabRefs.current.forEach((el) => el && ro.observe(el));
+    }
+
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (ro) ro.disconnect();
+    };
+  }, [updateIndicator]);
 
   const handleNavClick = (tabId) => {
     onTabChange(tabId);
-    setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled
-          ? 'bg-[#060709]/90 backdrop-blur-2xl border-b border-white/[0.08] py-3 shadow-2xl'
-          : 'bg-gradient-to-b from-[#060709]/95 via-[#060709]/50 to-transparent py-4'
-      }`}
-    >
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-        {/* Brand Logo & Primary Navigation */}
-        <div className="flex items-center gap-6 lg:gap-8">
-          <button
-            onClick={() => handleNavClick('home')}
-            className="flex items-center group text-left flex-none"
-          >
-            <span className="text-xl font-extrabold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
-              McMovies<span className="text-red-500">.</span>
-            </span>
-          </button>
+    <>
+      {/* Desktop Centered Floating Glass Pill Capsule */}
+      <header className="hidden lg:flex fixed left-1/2 top-3.5 -translate-x-1/2 z-50 items-center gap-1.5 rounded-full glass-dock px-2.5 py-1.5 max-w-[96vw]">
+        <button
+          onClick={() => handleNavClick('home')}
+          className="flex items-center px-3 py-1.5 rounded-full group text-left flex-none"
+        >
+          <span className="text-lg font-extrabold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
+            McMovies<span className="text-red-500">.</span>
+          </span>
+        </button>
 
-          {/* Desktop Navigation (6 clean consumer categories) */}
-          <nav className="hidden lg:flex items-center gap-1 bg-zinc-900/70 border border-white/[0.08] rounded-full p-1 backdrop-blur-md">
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavClick(item.id)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                    isActive
-                      ? 'bg-white text-black font-semibold shadow-sm'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
-                        isActive ? 'bg-red-600 text-white' : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+        <div className="w-px h-5 bg-white/10 flex-none" />
 
-        {/* Right Utility Actions */}
-        <div className="flex items-center gap-2">
+        {/* Sliding Active Pill Navigation */}
+        <nav
+          ref={navContainerRef}
+          className="relative flex items-center gap-0.5 p-0.5"
+          aria-label="Navigasi utama"
+        >
+          <div
+            aria-hidden="true"
+            className="absolute top-0.5 bottom-0.5 left-0 rounded-full bg-white text-black shadow-md pointer-events-none transition-[transform,width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{
+              width: `${indicator.width}px`,
+              transform: `translate3d(${indicator.left}px, 0, 0)`,
+              opacity: indicator.visible ? 1 : 0,
+            }}
+          />
+
+          {NAV_ITEMS.map(({ id, label, Icon }) => {
+            const isActive = activeTab === id;
+            return (
+              <button
+                key={id}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(id, el);
+                  else tabRefs.current.delete(id);
+                }}
+                onClick={() => handleNavClick(id)}
+                className={`relative z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors duration-200 ${
+                  isActive
+                    ? 'text-black font-semibold'
+                    : 'text-zinc-300 hover:text-white font-medium'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 flex-none" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="w-px h-5 bg-white/10 flex-none" />
+
+        {/* Utility Icons */}
+        <div className="flex items-center gap-1 pr-0.5 flex-none">
           <button
             onClick={onOpenSearch}
-            className="flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-zinc-900/85 hover:bg-zinc-800 border border-white/[0.08] text-zinc-400 hover:text-white transition-all text-xs"
-            title="Cari film, series, Netflix... (Ctrl+K)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.14] border border-white/[0.08] text-zinc-300 hover:text-white transition-all text-xs"
+            title="Cari film & series (Ctrl+K)"
           >
             <Search className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Cari film, series, Netflix...</span>
-            <kbd className="hidden xl:inline px-1.5 py-0.5 text-[9px] bg-zinc-800 text-zinc-400 rounded-md">
-              Ctrl K
-            </kbd>
+            <kbd className="hidden xl:inline text-[10px] text-zinc-400 font-medium">Ctrl K</kbd>
           </button>
 
           <button
             onClick={onOpenWatchlist}
-            className="relative w-8 h-8 rounded-full bg-zinc-900/85 hover:bg-zinc-800 border border-white/[0.08] text-zinc-300 hover:text-white transition-all flex items-center justify-center"
+            className="relative w-8 h-8 rounded-full hover:bg-white/[0.12] text-zinc-300 hover:text-white transition-all flex items-center justify-center"
             title="Watchlist Saya"
           >
             <Bookmark className="w-4 h-4" />
             {watchlistCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white text-black text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-white text-black text-[9px] font-bold flex items-center justify-center">
                 {watchlistCount}
               </span>
             )}
@@ -119,59 +159,92 @@ export default function Navbar({
 
           <button
             onClick={onOpenHistory}
-            className="relative w-8 h-8 rounded-full bg-zinc-900/85 hover:bg-zinc-800 border border-white/[0.08] text-zinc-300 hover:text-white transition-all flex items-center justify-center"
+            className="relative w-8 h-8 rounded-full hover:bg-white/[0.12] text-zinc-300 hover:text-white transition-all flex items-center justify-center"
             title="Riwayat Nonton"
           >
             <History className="w-4 h-4" />
             {historyCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-700 text-white text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-zinc-700 text-white text-[9px] font-bold flex items-center justify-center">
                 {historyCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Floating Top Bar */}
+      <header className="lg:hidden fixed top-2.5 left-3 right-3 z-50 rounded-2xl glass-dock px-3.5 h-13 flex items-center justify-between gap-2">
+        <button
+          onClick={() => handleNavClick('home')}
+          className="flex items-center text-left flex-none"
+        >
+          <span className="text-lg font-extrabold tracking-tight text-white">
+            McMovies<span className="text-red-500">.</span>
+          </span>
+        </button>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenSearch}
+            className="w-8 h-8 rounded-full bg-white/[0.08] text-zinc-200 hover:text-white flex items-center justify-center transition-colors"
+            title="Cari film & series"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={onOpenWatchlist}
+            className="relative w-8 h-8 rounded-full bg-white/[0.08] text-zinc-200 hover:text-white flex items-center justify-center transition-colors"
+            title="Watchlist Saya"
+          >
+            <Bookmark className="w-4 h-4" />
+            {watchlistCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-3.5 px-1 rounded-full bg-white text-black text-[9px] font-bold flex items-center justify-center">
+                {watchlistCount}
               </span>
             )}
           </button>
 
           <button
-            onClick={() => setMobileMenuOpen((p) => !p)}
-            className="lg:hidden w-8 h-8 rounded-full bg-zinc-900/85 border border-white/[0.08] text-zinc-300 hover:text-white flex items-center justify-center"
-            aria-label="Menu"
+            onClick={onOpenHistory}
+            className="relative w-8 h-8 rounded-full bg-white/[0.08] text-zinc-200 hover:text-white flex items-center justify-center transition-colors"
+            title="Riwayat Nonton"
           >
-            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            <History className="w-4 h-4" />
+            {historyCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-3.5 px-1 rounded-full bg-zinc-700 text-white text-[9px] font-bold flex items-center justify-center">
+                {historyCount}
+              </span>
+            )}
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden mt-3 px-4 pb-4 bg-[#060709]/95 border-b border-white/[0.08] backdrop-blur-2xl">
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavClick(item.id)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl text-xs font-medium transition-all ${
-                    isActive
-                      ? 'bg-white text-black font-semibold'
-                      : 'bg-zinc-900/75 text-zinc-300 hover:bg-zinc-800'
-                  }`}
-                >
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
-                        isActive ? 'bg-red-600 text-white' : 'bg-red-500/20 text-red-300'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </header>
+      {/* Mobile Fixed Bottom Floating Glass Dock */}
+      <nav
+        className="lg:hidden fixed bottom-2.5 left-3 right-3 z-50 rounded-2xl glass-dock p-1 grid grid-cols-6 gap-1"
+        aria-label="Navigasi seluler"
+      >
+        {NAV_ITEMS.map(({ id, shortLabel, Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => handleNavClick(id)}
+              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all duration-200 active:scale-95 ${
+                isActive
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Icon className="w-4 h-4 mb-0.5" />
+              <span className="text-[9px] font-semibold tracking-tight leading-none">
+                {shortLabel}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+    </>
   );
 }

@@ -169,12 +169,36 @@ export default function App() {
   const [continueWatching, setContinueWatching] = useState([]);
   const watchlistIds = useMemo(() => new Set(watchlist.map((i) => String(i.id))), [watchlist]);
 
-  // Modals State
+  // Modals & UI Motion State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [ambientBackdropUrl, setAmbientBackdropUrl] = useState('');
+  const [sweepKey, setSweepKey] = useState(0);
 
   const loadedTabsRef = useRef(new Set());
+
+  const triggerTabSweep = useCallback(() => {
+    setSweepKey((k) => k + 1);
+  }, []);
+
+  useEffect(() => {
+    if (sweepKey === 0) return;
+    const t = setTimeout(() => setSweepKey(0), 460);
+    return () => clearTimeout(t);
+  }, [sweepKey]);
+
+  useEffect(() => {
+    triggerTabSweep();
+  }, [location.pathname, triggerTabSweep]);
+
+  const handleHeroSlideChange = useCallback((slide) => {
+    if (!slide) return;
+    const raw = slide.backdrop_path || slide.thumbnail;
+    if (!raw) return;
+    const url = slide.isDubIndo ? raw : TmdbService.getImageUrl(raw, 'w300');
+    setAmbientBackdropUrl(url);
+  }, []);
 
   // 2-Wave Fast Batched Initial Load (eliminates multi-MB eager JSONs & 18-call render storm)
   useEffect(() => {
@@ -490,11 +514,12 @@ export default function App() {
   const handleTabChange = useCallback(
     (tabId) => {
       setActiveTab(tabId);
+      triggerTabSweep();
       if (location.pathname !== '/') {
         navigate('/');
       }
     },
-    [location.pathname, navigate]
+    [location.pathname, navigate, triggerTabSweep]
   );
 
   // Derived Grid Data
@@ -580,7 +605,30 @@ export default function App() {
     location.pathname.startsWith('/detail');
 
   return (
-    <div className="min-h-screen bg-[#060709] text-zinc-100 flex flex-col selection:bg-white selection:text-black">
+    <div className="relative min-h-screen bg-[#060709] text-zinc-100 flex flex-col selection:bg-white selection:text-black">
+      {/* Subtle Live Ambient Backdrop synced to active Hero Slide */}
+      {!hideNavbar && activeTab === 'home' && ambientBackdropUrl && (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          <img
+            key={ambientBackdropUrl}
+            src={ambientBackdropUrl}
+            alt=""
+            className="w-full h-full object-cover scale-[1.2] blur-[84px] saturate-150 opacity-35 transition-opacity duration-1000"
+          />
+          <div className="absolute inset-0 bg-[#060709]/70" />
+        </div>
+      )}
+
+      {/* Sleek 2px Top Route/Tab Transition Sweep */}
+      {sweepKey > 0 && (
+        <div
+          key={`sweep-${sweepKey}`}
+          className="fixed top-0 left-0 right-0 h-[2px] z-[999] overflow-hidden pointer-events-none"
+        >
+          <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-white to-transparent animate-top-sweep" />
+        </div>
+      )}
+
       {!hideNavbar && (
         <Navbar
           activeTab={location.pathname === '/' ? activeTab : ''}
@@ -593,7 +641,7 @@ export default function App() {
         />
       )}
 
-      <div className="flex-1">
+      <div className="relative z-10 flex-1">
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/movie/:id" element={<DetailPage type="movie" />} />
@@ -609,7 +657,8 @@ export default function App() {
             <Route
               path="*"
               element={
-                <main className="pb-20">
+                <main className="pb-28 lg:pb-16">
+                  <div key={activeTab} className="animate-tab-enter">
                   {/* 1. BERANDA (HOME) */}
                   {activeTab === 'home' && (
                     <>
@@ -620,12 +669,14 @@ export default function App() {
                         onInfoClick={handleOpenDetail}
                         watchlistIds={watchlistIds}
                         onToggleWatchlist={handleToggleWatchlist}
+                        onActiveSlideChange={handleHeroSlideChange}
                       />
 
                       {continueWatching.length > 0 && (
                         <ContentRail
+                          eyebrow="TERAKHIR DITONTON"
                           title="Lanjutkan Menonton"
-                          subtitle="Lanjutkan tayangan terakhir yang Anda tonton"
+                          cardVariant="landscape"
                           eager
                           items={continueWatching}
                           onMovieClick={handleOpenDetail}
@@ -637,18 +688,15 @@ export default function App() {
                       )}
 
                       <ContentRail
+                        eyebrow={trendingWindow === 'day' ? 'POPULER HARI INI' : 'SEDANG TREN MINGGU INI'}
                         title="Trending Sekarang"
-                        subtitle={
-                          trendingWindow === 'day'
-                            ? 'Judul paling populer hari ini di seluruh dunia'
-                            : 'Rilisan terpanas dan paling banyak ditonton minggu ini'
-                        }
+                        cardVariant="landscape"
+                        top10Style
                         eager
                         items={deduplicatedHomeRails.trending}
                         loading={loadingHome}
-                        showRank
                         headerRight={
-                          <div className="inline-flex items-center p-0.5 rounded-full bg-zinc-900/90 border border-white/10">
+                          <div className="inline-flex items-center p-0.5 rounded-full bg-white/[0.06] border border-white/10">
                             {[
                               { id: 'week', label: 'Minggu Ini' },
                               { id: 'day', label: 'Hari Ini' },
@@ -674,8 +722,9 @@ export default function App() {
                       />
 
                       <ContentRail
+                        eyebrow="BARU DIRILIS"
                         title="Update Terbaru"
-                        subtitle="Upload film dan series terbaru dari seluruh server API aktif"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.updates}
                         loading={loadingHome}
                         onMovieClick={handleOpenDetail}
@@ -684,28 +733,28 @@ export default function App() {
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
                           setUpdatesProviderFilter('all');
-                          setActiveTab('updates');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('updates');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="MARVEL STUDIOS"
                         title="Marvel Cinematic Universe"
-                        subtitle="Koleksi lengkap seluruh film layar lebar Marvel Cinematic Universe"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.mcu}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
                         watchlistIds={watchlistIds}
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
-                          setActiveTab('mcu');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('mcu');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="NETFLIX INDONESIA"
                         title="Film & Series Indonesia Terbaru di Netflix 🇮🇩"
-                        subtitle="Rilisan terbaru Indonesia di Netflix lengkap dengan film dan serial pilihan"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.netflixIndo}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
@@ -713,42 +762,42 @@ export default function App() {
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
                           setIndoFilter('netflix');
-                          setActiveTab('indonesia');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('indonesia');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="LAYAR LEBAR"
                         title={`Film Bioskop Terbaru ${currentYear}`}
-                        subtitle="Film layar lebar terbaru & box office dunia yang sudah tayang"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.bioskop}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
                         watchlistIds={watchlistIds}
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
-                          setActiveTab('movies');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('movies');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="SERIAL POPULER"
                         title="Serial TV & Web Series Populer"
-                        subtitle="Serial TV terbaru & musim lengkap dari Netflix, HBO, Apple TV+, dan Prime"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.series}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
                         watchlistIds={watchlistIds}
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
-                          setActiveTab('series');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('series');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="SINEMA TANAH AIR"
                         title="Film & Series Indonesia Pilihan"
-                        subtitle="Bioskop tanah air dan serial populer karya sineas Indonesia"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.indoPilihan}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
@@ -756,42 +805,42 @@ export default function App() {
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
                           setIndoFilter('bioskop');
-                          setActiveTab('indonesia');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('indonesia');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="SUARA BAHASA INDONESIA"
                         title="Koleksi Dubbing Indonesia"
-                        subtitle="Film dan serial pilihan dengan audio dubbing Bahasa Indonesia resmi durasi penuh"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.dubIndo}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
                         watchlistIds={watchlistIds}
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
-                          setActiveTab('dubindo');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('dubindo');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="ASIA & ANIME"
                         title="Anime & Drama Asia Pilihan"
-                        subtitle="Anime simulcast Jepang, K-Drama hits, dan C-Drama terpopuler"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.asia}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
                         watchlistIds={watchlistIds}
                         onToggleWatchlist={handleToggleWatchlist}
                         onExploreMore={() => {
-                          setActiveTab('asia');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          handleTabChange('asia');
                         }}
                       />
 
                       <ContentRail
+                        eyebrow="SKOR TERTINGGI"
                         title="Rating Tertinggi Sepanjang Masa"
-                        subtitle="Film dan serial terbaik pilihan penonton global"
+                        cardVariant="landscape"
                         items={deduplicatedHomeRails.topRated}
                         onMovieClick={handleOpenDetail}
                         onPlayClick={handlePlayMovie}
@@ -803,7 +852,7 @@ export default function App() {
 
                   {/* UPDATE TERBARU (ALL API UPLOADS GRID) */}
                   {activeTab === 'updates' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <button
                         onClick={() => setActiveTab('home')}
                         className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
@@ -866,6 +915,7 @@ export default function App() {
                             <MovieCard
                               key={`upd-${item.media_type}-${item.id}`}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -880,7 +930,7 @@ export default function App() {
 
                   {/* MARVEL CINEMATIC UNIVERSE COMPLETE GRID */}
                   {activeTab === 'mcu' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <button
                         onClick={() => setActiveTab('home')}
                         className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
@@ -935,6 +985,7 @@ export default function App() {
                             <MovieCard
                               key={`mcu-${item.id}`}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -949,7 +1000,7 @@ export default function App() {
 
                   {/* 2. FILM (MOVIES) */}
                   {activeTab === 'movies' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <div className="mb-6">
                         <div className="flex flex-wrap items-center gap-3">
                           <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
@@ -1027,6 +1078,7 @@ export default function App() {
                             <MovieCard
                               key={item.id}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -1041,7 +1093,7 @@ export default function App() {
 
                   {/* 3. SERIES (TV SHOWS) */}
                   {activeTab === 'series' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <div className="mb-6">
                         <div className="flex flex-wrap items-center gap-3">
                           <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
@@ -1090,6 +1142,7 @@ export default function App() {
                             <MovieCard
                               key={item.id}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -1104,7 +1157,7 @@ export default function App() {
 
                   {/* 4. INDONESIA & NETFLIX */}
                   {activeTab === 'indonesia' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <div className="mb-6">
                         <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30 mb-2">
                           🇮🇩 Rilis Terbaru {currentYear - 1} & {currentYear}
@@ -1157,6 +1210,7 @@ export default function App() {
                             <MovieCard
                               key={`${item.id}-${item.media_type || 'm'}`}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -1171,7 +1225,7 @@ export default function App() {
 
                   {/* 5. ANIME & ASIA */}
                   {activeTab === 'asia' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <div className="mb-6">
                         <div className="flex flex-wrap items-center gap-3">
                           <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
@@ -1222,6 +1276,7 @@ export default function App() {
                             <MovieCard
                               key={`${item.media_type || 'x'}_${item.id}`}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -1236,7 +1291,7 @@ export default function App() {
 
                   {/* 6. DUB INDO */}
                   {activeTab === 'dubindo' && (
-                    <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+                    <div className="pt-24 lg:pt-28 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
                       <div className="mb-6">
                         <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-2">
                           🇮🇩 Audio Dubbing Bahasa Indonesia
@@ -1288,6 +1343,7 @@ export default function App() {
                             <MovieCard
                               key={item.id}
                               item={item}
+                              variant="poster"
                               className="w-full"
                               onClick={handleOpenDetail}
                               onPlay={handlePlayMovie}
@@ -1299,6 +1355,7 @@ export default function App() {
                       )}
                     </div>
                   )}
+                  </div>
                 </main>
               }
             />
@@ -1307,7 +1364,7 @@ export default function App() {
       </div>
 
       {/* Clean Minimal Footer */}
-      <footer className="mt-auto border-t border-white/[0.08] bg-[#060709] py-8 px-4 sm:px-6 lg:px-8">
+      <footer className="relative z-10 mt-auto border-t border-white/[0.08] bg-black/40 backdrop-blur-md pt-8 pb-24 lg:pb-8 px-4 sm:px-6 lg:px-10">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <span className="text-lg font-extrabold tracking-tight text-white">

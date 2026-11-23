@@ -743,6 +743,7 @@ export default function DetailPage({ type: propType }) {
                 <MovieCard
                   key={sim.id}
                   item={sim}
+                  variant="poster"
                   className="w-full"
                   onClick={(m) => {
                     const targetType = m.media_type === 'tv' ? 'tv' : 'movie';

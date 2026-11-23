@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Hls from 'hls.js';
 import {
   Play,
@@ -6,28 +6,54 @@ import {
   RotateCcw,
   RotateCw,
   ChevronLeft,
+  ChevronRight,
   Volume2,
   VolumeX,
   Maximize,
   Minimize,
+  PictureInPicture2,
   Lock,
   Unlock,
   Settings,
   Subtitles,
+  Layers,
   Users,
+  ListVideo,
+  Palette,
+  Upload,
   RefreshCw,
   SkipBack,
   SkipForward,
+  FastForward,
   AlertCircle,
   Loader2,
   Film,
-  Check
+  Check,
+  X,
 } from 'lucide-react';
+import { StorageService } from '../services/storageService';
 
-/**
- * McMovies HTML5 + HLS.js Player
- * Plays all direct .m3u8 HLS streams and .mp4 streams inside McMovies with zero external iframes.
- */
+const ACCENT_SWATCHES = [
+  '#ffffff',
+  '#3b82f6',
+  '#ef4444',
+  '#a855f7',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#06b6d4',
+];
+
+const SUB_COLOR_SWATCHES = ['#ffffff', '#facc15', '#4ade80', '#38bdf8'];
+
+function convertSrtToVttClient(text) {
+  const clean = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+  return clean.trimStart().startsWith('WEBVTT') ? clean : `WEBVTT\n\n${clean}`;
+}
+
 export default function CinemaPlayer({
   streams = [],
   activeStreamIndex = 0,
@@ -38,7 +64,7 @@ export default function CinemaPlayer({
   onRetryExtract,
   onBackToDetail,
   title = 'Untitled',
-  subtitleBadge = '',
+  titleLogoUrl = null,
   year = '',
   rating = '',
   runtime = '',
@@ -47,10 +73,17 @@ export default function CinemaPlayer({
   isSeries = false,
   currentSeason = 1,
   currentEpisode = 1,
+  episodesList = [],
+  validSeasons = [],
+  onSeasonChange,
+  onEpisodeChange,
   onPrevEpisode,
   onNextEpisode,
   hasPrevEpisode = false,
   hasNextEpisode = false,
+  parts = [],
+  selectedPart = 1,
+  onSelectPart,
   onBack,
   onShare,
   isDubAudio = false,
@@ -62,11 +95,17 @@ export default function CinemaPlayer({
   const mediaRecoveryRef = useRef(0);
   const triedProxyRef = useRef(false);
   const lastTapRef = useRef({ time: 0, side: null });
+  const fileInputRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const uploadedBlobUrlsRef = useRef([]);
 
+  const [prefs, setPrefs] = useState(() => StorageService.getPlayerPrefs());
   const [isPlaying, setIsPlaying] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  const [audioBoost, setAudioBoost] = useState(100); // 100 | 150 | 200
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [bufferedTime, setBufferedTime] = useState(0);
@@ -75,25 +114,70 @@ export default function CinemaPlayer({
   const [isLandscapeMode, setIsLandscapeMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isScreenLocked, setIsScreenLocked] = useState(false);
-  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
-  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
   const [lockNotice, setLockNotice] = useState(false);
   const [statusToast, setStatusToast] = useState('');
+  const [osdMessage, setOsdMessage] = useState('');
   const [streamFailed, setStreamFailed] = useState(false);
   const [qualityLevels, setQualityLevels] = useState([]);
   const [activeLevel, setActiveLevel] = useState(-1); // -1 = Auto
+  const [uploadedSubs, setUploadedSubs] = useState([]);
   const [activeSubIndex, setActiveSubIndex] = useState(() => (subtitles.length > 0 ? 0 : -1));
+  const [hoverSeek, setHoverSeek] = useState(null); // { pct, time }
+
+  // Unified Floating Panel State
+  const [panelTab, setPanelTab] = useState(null); // null | 'source' | 'quality' | 'subtitles' | 'playback'
+  const [showAppearanceSub, setShowAppearanceSub] = useState(false);
+  const [showEpisodesDrawer, setShowEpisodesDrawer] = useState(false);
+  const [sourceProtoFilter, setSourceProtoFilter] = useState('all'); // all | hls | mp4
 
   const activeStream = streams[activeStreamIndex] || null;
+  const allSubtitles = useMemo(() => [...subtitles, ...uploadedSubs], [subtitles, uploadedSubs]);
 
-  // Keep activeSubIndex in sync when subtitles arrive
+  const updatePref = useCallback((patch) => {
+    setPrefs((prev) => {
+      const next = StorageService.savePlayerPrefs({ ...prev, ...patch });
+      return next;
+    });
+  }, []);
+
+  const flashOsd = useCallback((msg) => {
+    setOsdMessage(msg);
+  }, []);
+
   useEffect(() => {
-    if (subtitles.length > 0 && activeSubIndex === -1) {
+    if (!osdMessage) return;
+    const t = setTimeout(() => setOsdMessage(''), 1300);
+    return () => clearTimeout(t);
+  }, [osdMessage]);
+
+  useEffect(() => {
+    if (!statusToast) return;
+    const t = setTimeout(() => setStatusToast(''), 4200);
+    return () => clearTimeout(t);
+  }, [statusToast]);
+
+  // Revoke any local uploaded subtitle blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const u of uploadedBlobUrlsRef.current) {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {}
+      }
+      if (audioCtxRef.current && typeof audioCtxRef.current.close === 'function') {
+        audioCtxRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
+
+  // Sync activeSubIndex when extracted subtitles arrive
+  useEffect(() => {
+    if (allSubtitles.length > 0 && activeSubIndex === -1) {
       setActiveSubIndex(0);
-    } else if (subtitles.length === 0) {
+    } else if (allSubtitles.length === 0) {
       setActiveSubIndex(-1);
     }
-  }, [subtitles.length]);
+  }, [allSubtitles.length]);
 
   // Apply text track mode changes
   useEffect(() => {
@@ -102,14 +186,24 @@ export default function CinemaPlayer({
     for (let i = 0; i < video.textTracks.length; i++) {
       video.textTracks[i].mode = i === activeSubIndex ? 'showing' : 'disabled';
     }
-  }, [activeSubIndex, subtitles, activeStreamIndex]);
+  }, [activeSubIndex, allSubtitles, activeStreamIndex]);
 
-  // Clear status toast after 4.5s
+  // Apply Data Saver (cap HLS auto quality <= 720p)
   useEffect(() => {
-    if (!statusToast) return;
-    const t = setTimeout(() => setStatusToast(''), 4500);
-    return () => clearTimeout(t);
-  }, [statusToast]);
+    const hls = hlsRef.current;
+    if (!hls || qualityLevels.length === 0) return;
+    if (prefs.dataSaver) {
+      let max720 = -1;
+      for (const lvl of qualityLevels) {
+        if (lvl.height > 0 && lvl.height <= 720) {
+          max720 = lvl.index;
+        }
+      }
+      hls.autoLevelCapping = max720;
+    } else {
+      hls.autoLevelCapping = -1;
+    }
+  }, [prefs.dataSaver, qualityLevels]);
 
   // Initialize / switch HLS.js or direct MP4 playback
   useEffect(() => {
@@ -171,6 +265,8 @@ export default function CinemaPlayer({
         const parsed = (data?.levels || []).map((lvl, idx) => ({
           index: idx,
           height: lvl.height || 0,
+          width: lvl.width || 0,
+          bitrate: lvl.bitrate || 0,
           label: lvl.height ? `${lvl.height}p` : `Kualitas ${idx + 1}`,
         }));
         setQualityLevels(parsed);
@@ -233,12 +329,12 @@ export default function CinemaPlayer({
 
   const scheduleHideControls = useCallback(() => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    if (isPlaying && !showSettingsMenu && !showSubtitleMenu) {
+    if (isPlaying && !panelTab && !showEpisodesDrawer) {
       controlsTimeoutRef.current = setTimeout(() => {
         setShowControls(false);
       }, 2800);
     }
-  }, [isPlaying, showSettingsMenu, showSubtitleMenu]);
+  }, [isPlaying, panelTab, showEpisodesDrawer]);
 
   const handleMouseMove = () => {
     if (isScreenLocked) return;
@@ -248,7 +344,7 @@ export default function CinemaPlayer({
 
   const triggerLockNotice = () => {
     setLockNotice(true);
-    setTimeout(() => setLockNotice(false), 2000);
+    setTimeout(() => setLockNotice(false), 1800);
   };
 
   const togglePlay = useCallback(() => {
@@ -267,18 +363,22 @@ export default function CinemaPlayer({
     }
   }, [isScreenLocked]);
 
-  const skipTime = useCallback((seconds) => {
-    if (isScreenLocked) {
-      triggerLockNotice();
-      return;
-    }
-    const video = videoRef.current;
-    if (!video) return;
-    const target = Math.min(Math.max(video.currentTime + seconds, 0), video.duration || duration || 36000);
-    video.currentTime = target;
-    setCurrentTime(target);
-    setShowControls(true);
-  }, [isScreenLocked, duration]);
+  const skipTime = useCallback(
+    (seconds, customLabel) => {
+      if (isScreenLocked) {
+        triggerLockNotice();
+        return;
+      }
+      const video = videoRef.current;
+      if (!video) return;
+      const target = Math.min(Math.max(video.currentTime + seconds, 0), video.duration || duration || 36000);
+      video.currentTime = target;
+      setCurrentTime(target);
+      setShowControls(true);
+      flashOsd(customLabel || `${seconds > 0 ? `+${seconds}` : seconds} dtk`);
+    },
+    [isScreenLocked, duration, flashOsd]
+  );
 
   const handleSeek = (e) => {
     if (isScreenLocked || !videoRef.current) return;
@@ -290,7 +390,7 @@ export default function CinemaPlayer({
   const handleSpeedChange = (speed) => {
     setPlaybackSpeed(speed);
     if (videoRef.current) videoRef.current.playbackRate = speed;
-    setShowSettingsMenu(false);
+    flashOsd(`Kecepatan ${speed}×`);
   };
 
   const handleQualityChange = (levelIndex) => {
@@ -298,8 +398,56 @@ export default function CinemaPlayer({
     if (hlsRef.current) {
       hlsRef.current.currentLevel = levelIndex;
     }
-    setShowSettingsMenu(false);
+    const lvl = qualityLevels.find((q) => q.index === levelIndex);
+    flashOsd(levelIndex === -1 ? 'Kualitas Auto' : lvl?.label || 'Kualitas');
   };
+
+  const handleAudioBoostChange = (pct) => {
+    setAudioBoost(pct);
+    const video = videoRef.current;
+    if (!video) return;
+    if (pct === 100 && !gainNodeRef.current) {
+      flashOsd('Audio 100%');
+      return;
+    }
+    try {
+      if (!audioCtxRef.current && pct > 100) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          flashOsd('Penguat audio tidak didukung browser');
+          return;
+        }
+        const ctx = new AudioCtx();
+        const src = ctx.createMediaElementSource(video);
+        const gain = ctx.createGain();
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        audioCtxRef.current = ctx;
+        gainNodeRef.current = gain;
+      }
+      if (audioCtxRef.current?.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      if (gainNodeRef.current) {
+        gainNodeRef.current.gain.value = pct / 100;
+        flashOsd(`Penguat Audio ${pct}%`);
+      }
+    } catch {
+      flashOsd('Penguat audio tidak tersedia pada server ini');
+    }
+  };
+
+  const handleTogglePip = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !document.pictureInPictureEnabled) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await video.requestPictureInPicture();
+      }
+    } catch {}
+  }, []);
 
   const handleToggleMute = useCallback(() => {
     const video = videoRef.current;
@@ -307,7 +455,8 @@ export default function CinemaPlayer({
     const next = !video.muted;
     video.muted = next;
     setIsMuted(next);
-  }, []);
+    flashOsd(next ? 'Audio Bisu' : 'Audio Aktif');
+  }, [flashOsd]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (isFullscreen) {
@@ -349,7 +498,6 @@ export default function CinemaPlayer({
     setIsFullscreen(true);
   }, [isFullscreen]);
 
-  // Sync browser native fullscreen exits (Escape key)
   useEffect(() => {
     const onFsChange = () => {
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -370,6 +518,17 @@ export default function CinemaPlayer({
     const onKeyDown = (e) => {
       const tag = (e.target?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === 'Escape') {
+        if (panelTab) {
+          setPanelTab(null);
+          setShowAppearanceSub(false);
+          return;
+        }
+        if (showEpisodesDrawer) {
+          setShowEpisodesDrawer(false);
+          return;
+        }
+      }
       if (!activeStream) return;
 
       switch (e.key.toLowerCase()) {
@@ -394,6 +553,7 @@ export default function CinemaPlayer({
             videoRef.current.muted = false;
             setVolume(v);
             setIsMuted(false);
+            flashOsd(`Volume ${Math.round(v * 100)}%`);
           }
           break;
         case 'arrowdown':
@@ -404,6 +564,7 @@ export default function CinemaPlayer({
             videoRef.current.muted = v === 0;
             setVolume(v);
             setIsMuted(v === 0);
+            flashOsd(`Volume ${Math.round(v * 100)}%`);
           }
           break;
         case 'm':
@@ -414,22 +575,75 @@ export default function CinemaPlayer({
           e.preventDefault();
           handleToggleFullscreen();
           break;
+        case 'p':
+          e.preventDefault();
+          handleTogglePip();
+          break;
+        case 'c':
+          e.preventDefault();
+          if (allSubtitles.length > 0) {
+            setActiveSubIndex((prev) => (prev >= 0 ? -1 : 0));
+          }
+          break;
+        case 'l':
+          e.preventDefault();
+          setIsScreenLocked((p) => !p);
+          break;
         default:
           break;
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeStream, togglePlay, skipTime, handleToggleMute, handleToggleFullscreen]);
+  }, [
+    activeStream,
+    panelTab,
+    showEpisodesDrawer,
+    togglePlay,
+    skipTime,
+    handleToggleMute,
+    handleToggleFullscreen,
+    handleTogglePip,
+    allSubtitles.length,
+    flashOsd,
+  ]);
+
+  const handleSubtitleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const vtt = convertSrtToVttClient(text);
+      const blob = new Blob([vtt], { type: 'text/vtt' });
+      const url = URL.createObjectURL(blob);
+      uploadedBlobUrlsRef.current.push(url);
+      const cleanName = file.name.replace(/\.(srt|vtt)$/i, '').slice(0, 28);
+      setUploadedSubs((prev) => {
+        const next = [...prev, { url, lang: 'id', label: cleanName || 'Subtitle Lokal' }];
+        setActiveSubIndex(subtitles.length + next.length - 1);
+        return next;
+      });
+      flashOsd('Subtitle berhasil dimuat');
+    } catch {
+      flashOsd('Gagal membaca file subtitle');
+    }
+    e.target.value = '';
+  };
 
   const handleSurfaceClick = (e) => {
     if (isScreenLocked) {
       triggerLockNotice();
       return;
     }
+    if (panelTab || showEpisodesDrawer) {
+      setPanelTab(null);
+      setShowAppearanceSub(false);
+      setShowEpisodesDrawer(false);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / Math.max(rect.width, 1);
-    const side = relX < 0.35 ? 'left' : relX > 0.65 ? 'right' : 'center';
+    const side = relX < 0.32 ? 'left' : relX > 0.68 ? 'right' : 'center';
     const now = Date.now();
 
     if (side !== 'center' && lastTapRef.current.side === side && now - lastTapRef.current.time < 280) {
@@ -458,6 +672,54 @@ export default function CinemaPlayer({
   const playedPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const bufferedPct = duration > 0 ? Math.min(100, (bufferedTime / duration) * 100) : 0;
 
+  const filteredSources = useMemo(() => {
+    return streams
+      .map((s, idx) => ({ ...s, originalIndex: idx }))
+      .filter((s) => (sourceProtoFilter === 'all' ? true : (s.type || 'hls') === sourceProtoFilter));
+  }, [streams, sourceProtoFilter]);
+
+  const togglePanel = (tab) => {
+    setShowEpisodesDrawer(false);
+    setShowAppearanceSub(false);
+    setPanelTab((prev) => (prev === tab ? null : tab));
+  };
+
+  const activeQualityLabel =
+    activeLevel >= 0 && qualityLevels[activeLevel]
+      ? qualityLevels[activeLevel].label
+      : activeStream?.type === 'mp4'
+        ? 'HD'
+        : 'Auto';
+
+  const panelSurfaceClass =
+    prefs.panelStyle === 'solid'
+      ? 'bg-[#11131a] border border-white/15 shadow-2xl'
+      : 'glass-dock';
+
+  const progressFillStyle =
+    prefs.progressStyle === 'gradient'
+      ? {
+          width: `${playedPct}%`,
+          background: `linear-gradient(90deg, #ffffff 0%, ${prefs.accentColor} 100%)`,
+        }
+      : prefs.progressStyle === 'glow'
+        ? {
+            width: `${playedPct}%`,
+            backgroundColor: prefs.accentColor,
+            boxShadow: `0 0 12px ${prefs.accentColor}`,
+          }
+        : {
+            width: `${playedPct}%`,
+            backgroundColor: prefs.accentColor,
+          };
+
+  const videoFitClass =
+    prefs.pictureFit === 'cover'
+      ? 'object-cover'
+      : prefs.pictureFit === 'fill'
+        ? 'object-fill'
+        : 'object-contain';
+
   return (
     <div
       ref={containerRef}
@@ -466,23 +728,34 @@ export default function CinemaPlayer({
           ? isLandscapeMode
             ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vh] h-[100vw] rotate-90 z-[99999] bg-black overflow-hidden flex items-center justify-center'
             : 'fixed inset-0 w-screen h-screen z-[99999] bg-black overflow-hidden flex items-center justify-center'
-          : 'relative w-full aspect-video rounded-2xl overflow-hidden bg-[#0a0c12] border border-white/[0.09] shadow-2xl select-none'
+          : 'relative w-full h-full bg-black overflow-hidden select-none'
       }
       onMouseMove={handleMouseMove}
     >
-      {/* STATE 1: Extracting CloudX Direct Stream Overlay */}
+      {/* Dynamic Scoped Subtitle Cue Style */}
+      <style>{`
+        .mc-player-video::cue {
+          font-family: 'Poppins', sans-serif;
+          font-size: ${prefs.subSize}%;
+          color: ${prefs.subColor};
+          background-color: ${prefs.subBg ? 'rgba(0, 0, 0, 0.72)' : 'transparent'};
+          text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+        }
+      `}</style>
+
+      {/* STATE 1: Loading / Preparing Stream */}
       {isExtracting && !activeStream && (
         <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center overflow-hidden">
           {posterUrl && (
             <img
               src={posterUrl}
               alt={title}
-              className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-110 pointer-events-none"
+              className="absolute inset-0 w-full h-full object-cover opacity-20 blur-2xl scale-110 pointer-events-none"
             />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/50 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/75 to-black/60 pointer-events-none" />
           <div className="relative z-10 flex flex-col items-center max-w-md space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-xl flex items-center justify-center shadow-2xl">
+            <div className="w-14 h-14 rounded-2xl glass-dock flex items-center justify-center shadow-2xl">
               <Loader2 className="w-7 h-7 text-white animate-spin" />
             </div>
             <div>
@@ -497,7 +770,7 @@ export default function CinemaPlayer({
         </div>
       )}
 
-      {/* STATE 2: No Direct Stream Found or All Direct Mirrors Failed */}
+      {/* STATE 2: No Stream Available */}
       {!isExtracting && (!activeStream || streamFailed) && (
         <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center overflow-hidden">
           {posterUrl && (
@@ -520,23 +793,23 @@ export default function CinemaPlayer({
               </h3>
               <p className="text-xs sm:text-sm text-zinc-400 mt-1.5 leading-relaxed">
                 {extractError ||
-                  `Server CloudX untuk "${title}" belum merespons atau judul/episode ini baru saja dirilis. Coba pindai ulang server langsung kami.`}
+                  `Server untuk "${title}" belum merespons. Coba pindai ulang server kami.`}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
               {onRetryExtract && (
                 <button
                   onClick={onRetryExtract}
-                  className="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-extrabold flex items-center gap-2 transition-all active:scale-95 shadow-lg"
+                  className="px-5 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-black text-xs font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Scan Ulang Server Langsung</span>
+                  <span>Scan Ulang Server</span>
                 </button>
               )}
               {onBackToDetail && (
                 <button
                   onClick={onBackToDetail}
-                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold transition-all active:scale-95"
+                  className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold transition-all active:scale-95"
                 >
                   Kembali ke Detail
                 </button>
@@ -546,7 +819,7 @@ export default function CinemaPlayer({
         </div>
       )}
 
-      {/* STATE 3: Pure Native HTML5 + HLS.js Video Canvas */}
+      {/* STATE 3: Full-Viewport HTML5 + HLS Video Canvas */}
       {activeStream && !streamFailed && (
         <div
           className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden"
@@ -555,8 +828,8 @@ export default function CinemaPlayer({
           <video
             ref={videoRef}
             playsInline
-            crossOrigin={activeStream.type === 'hls' || subtitles.length > 0 ? 'anonymous' : undefined}
-            className="w-full h-full object-contain bg-black"
+            crossOrigin={activeStream.type === 'hls' || allSubtitles.length > 0 ? 'anonymous' : undefined}
+            className={`mc-player-video w-full h-full ${videoFitClass} bg-black transition-all duration-200`}
             onWaiting={() => setIsBuffering(true)}
             onCanPlay={() => setIsBuffering(false)}
             onLoadedData={() => setIsBuffering(false)}
@@ -597,7 +870,7 @@ export default function CinemaPlayer({
               }
             }}
           >
-            {subtitles.map((sub, idx) => (
+            {allSubtitles.map((sub, idx) => (
               <track
                 key={sub.url || idx}
                 kind="subtitles"
@@ -609,7 +882,7 @@ export default function CinemaPlayer({
             ))}
           </video>
 
-          {/* Standalone Buffering Indicator ONLY when HUD is hidden */}
+          {/* Center Buffering Spinner when HUD Hidden */}
           {isBuffering && !showControls && isPlaying && !isScreenLocked && (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20">
               <div className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-md border border-white/15 flex items-center justify-center shadow-2xl">
@@ -618,58 +891,69 @@ export default function CinemaPlayer({
             </div>
           )}
 
-          {/* Status Toast inside player */}
+          {/* Transient OSD Pill */}
+          {osdMessage && (
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full glass-dock text-white text-xs font-semibold pointer-events-none animate-modal-pop">
+              {osdMessage}
+            </div>
+          )}
+
+          {/* Status Toast */}
           {statusToast && (
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/85 border border-emerald-500/40 text-emerald-300 text-xs font-semibold backdrop-blur-md pointer-events-none shadow-xl">
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/85 border border-emerald-500/40 text-emerald-300 text-xs font-semibold backdrop-blur-md pointer-events-none shadow-xl">
               {statusToast}
             </div>
           )}
 
-          {/* Lock Notice Toast */}
+          {/* Lock Notice */}
           {lockNotice && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 px-4 py-2 rounded-xl bg-black/85 backdrop-blur-md border border-white/20 text-white text-xs font-bold flex items-center gap-2 pointer-events-none">
-              <Lock className="w-4 h-4 text-amber-400" />
-              <span>Layar Terkunci (Sentuh ikon gembok untuk membuka)</span>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 px-4 py-2 rounded-full glass-dock text-white text-xs font-semibold flex items-center gap-2 pointer-events-none">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Layar Terkunci</span>
             </div>
           )}
 
-          {/* Screen Lock Padlock (Mid-Left) */}
+          {/* Mid-Left Padlock */}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setIsScreenLocked((prev) => !prev);
+              setIsScreenLocked((prev) => {
+                const next = !prev;
+                flashOsd(next ? 'Layar Terkunci' : 'Kunci Dibuka');
+                return next;
+              });
             }}
-            className={`absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-30 p-2.5 sm:p-3 rounded-full backdrop-blur-xl border transition-all active:scale-95 shadow-xl ${
+            className={`absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full border backdrop-blur-xl flex items-center justify-center transition-all active:scale-95 ${
               isScreenLocked
-                ? 'bg-amber-500/85 text-black border-amber-400'
-                : `bg-black/50 hover:bg-black/80 text-white/80 hover:text-white border-white/20 ${
+                ? 'bg-white text-black border-white shadow-xl opacity-100'
+                : `bg-black/45 hover:bg-black/75 text-white/80 hover:text-white border-white/15 ${
                     showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`
             }`}
             title={isScreenLocked ? 'Buka Kunci Layar' : 'Kunci Layar'}
           >
-            {isScreenLocked ? <Lock className="w-4 h-4 sm:w-5 sm:h-5" /> : <Unlock className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {isScreenLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
           </button>
 
-          {/* CinemaOS Player HUD Overlay */}
+          {/* Main HUD Overlay */}
           <div
             className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-300 ${
               isScreenLocked
                 ? 'opacity-0 pointer-events-none'
-                : showControls || !isPlaying
+                : showControls || !isPlaying || Boolean(panelTab) || showEpisodesDrawer
                   ? 'opacity-100'
                   : 'opacity-0 pointer-events-none'
             }`}
           >
             {/* Top Bar */}
-            <div className="relative z-30 px-3 sm:px-5 py-3 sm:py-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent flex items-center justify-between gap-3 pointer-events-auto">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="relative z-30 px-4 sm:px-7 py-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent flex items-center justify-between gap-3 pointer-events-auto">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     if (onBack) onBack();
                   }}
-                  className="p-2 rounded-full hover:bg-white/10 text-white transition-all active:scale-95 flex-none"
+                  className="w-9 h-9 rounded-full hover:bg-white/10 text-white flex items-center justify-center transition-all active:scale-95 flex-none"
                   title="Kembali"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -680,75 +964,86 @@ export default function CinemaPlayer({
                     {isSeries ? ` • S${currentSeason}:E${currentEpisode}` : ''}
                   </h2>
                   <p className="text-[11px] text-zinc-400 font-medium truncate">
-                    {year ? `${year} • ` : ''}{runtime ? `${runtime} • ` : ''}{activeStream.providerLabel || 'HD Server'}
+                    {year ? `${year} • ` : ''}
+                    {runtime ? `${runtime} • ` : ''}
+                    {activeStream.providerLabel || 'HD Server'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 flex-none">
+                {isSeries && episodesList.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPanelTab(null);
+                      setShowEpisodesDrawer((p) => !p);
+                    }}
+                    className={`h-9 px-3 rounded-full border backdrop-blur-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      showEpisodesDrawer
+                        ? 'bg-white text-black border-white'
+                        : 'bg-black/45 hover:bg-white/15 text-zinc-200 border-white/15'
+                    }`}
+                    title="Daftar Episode"
+                  >
+                    <ListVideo className="w-4 h-4" />
+                    <span className="hidden sm:inline">Episode</span>
+                  </button>
+                )}
+
                 {onShare && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onShare();
+                      flashOsd('Link disalin');
                     }}
-                    className="p-2 rounded-xl bg-black/40 hover:bg-black/70 text-zinc-300 border border-white/10 backdrop-blur-md transition-all hidden sm:flex"
+                    className="w-9 h-9 rounded-full bg-black/45 hover:bg-white/15 text-zinc-200 border border-white/15 backdrop-blur-md hidden sm:flex items-center justify-center transition-all"
                     title="Bagikan Link"
                   >
                     <Users className="w-4 h-4" />
                   </button>
                 )}
-                {isFullscreen ? (
-                  <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsLandscapeMode((prev) => !prev);
-                      }}
-                      className="sm:hidden p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/15 backdrop-blur-md transition-all"
-                      title={isLandscapeMode ? 'Mode Vertikal' : 'Mode Horizontal'}
-                    >
-                      <RotateCw className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleFullscreen();
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/15 backdrop-blur-md flex items-center gap-1.5 transition-all"
-                      title="Keluar Layar Penuh"
-                    >
-                      <Minimize className="w-3.5 h-3.5" />
-                      <span>Keluar</span>
-                    </button>
-                  </>
-                ) : (
+
+                {typeof document !== 'undefined' && document.pictureInPictureEnabled && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleToggleFullscreen();
+                      handleTogglePip();
                     }}
-                    className="p-2 rounded-xl bg-black/40 hover:bg-black/70 text-zinc-300 border border-white/10 backdrop-blur-md transition-all"
-                    title="Layar Penuh"
+                    className="w-9 h-9 rounded-full bg-black/45 hover:bg-white/15 text-zinc-200 border border-white/15 backdrop-blur-md hidden sm:flex items-center justify-center transition-all"
+                    title="Picture-in-Picture"
                   >
-                    <Maximize className="w-4 h-4" />
+                    <PictureInPicture2 className="w-4 h-4" />
+                  </button>
+                )}
+
+                {isFullscreen && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsLandscapeMode((prev) => !prev);
+                    }}
+                    className="sm:hidden px-2.5 h-8 rounded-full bg-white/15 text-white text-[11px] font-semibold border border-white/15 backdrop-blur-md"
+                  >
+                    Putar
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Center Rewind / Play / Forward (true geometric center) */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-6 sm:gap-10 pointer-events-auto z-20">
+            {/* Center Rewind / Play / Forward */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-7 sm:gap-11 pointer-events-auto z-20">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   skipTime(-10);
                 }}
-                className="w-11 h-11 sm:w-13 sm:h-13 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 backdrop-blur-md border border-white/15 flex flex-col items-center justify-center text-white transition-all shadow-lg"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/45 hover:bg-white/20 active:scale-90 backdrop-blur-md border border-white/15 flex flex-col items-center justify-center text-white transition-all shadow-lg"
                 title="Mundur 10 detik"
               >
                 <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-[8px] font-black -mt-0.5">10</span>
+                <span className="text-[9px] font-bold -mt-0.5">10</span>
               </button>
 
               <button
@@ -756,15 +1051,19 @@ export default function CinemaPlayer({
                   e.stopPropagation();
                   togglePlay();
                 }}
-                className="w-14 h-14 sm:w-18 sm:h-18 rounded-full bg-white/25 hover:bg-white/35 active:scale-95 backdrop-blur-xl border border-white/30 flex items-center justify-center text-white transition-all shadow-2xl"
+                className={
+                  prefs.playBtnStyle === 'bare'
+                    ? 'w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-transform'
+                    : 'w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-xl border border-white/30 flex items-center justify-center text-white transition-all shadow-2xl'
+                }
                 title={isBuffering ? 'Memuat...' : isPlaying ? 'Jeda' : 'Putar'}
               >
                 {isBuffering ? (
-                  <Loader2 className="w-7 h-7 sm:w-9 sm:h-9 animate-spin text-white" />
+                  <Loader2 className="w-8 h-8 sm:w-9 sm:h-9 animate-spin text-white" />
                 ) : isPlaying ? (
-                  <Pause className="w-7 h-7 sm:w-9 sm:h-9 fill-white" />
+                  <Pause className="w-8 h-8 sm:w-9 sm:h-9 fill-white" />
                 ) : (
-                  <Play className="w-7 h-7 sm:w-9 sm:h-9 fill-white translate-x-0.5" />
+                  <Play className="w-8 h-8 sm:w-9 sm:h-9 fill-white translate-x-0.5" />
                 )}
               </button>
 
@@ -773,46 +1072,101 @@ export default function CinemaPlayer({
                   e.stopPropagation();
                   skipTime(10);
                 }}
-                className="w-11 h-11 sm:w-13 sm:h-13 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 backdrop-blur-md border border-white/15 flex flex-col items-center justify-center text-white transition-all shadow-lg"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/45 hover:bg-white/20 active:scale-90 backdrop-blur-md border border-white/15 flex flex-col items-center justify-center text-white transition-all shadow-lg"
                 title="Maju 10 detik"
               >
                 <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-[8px] font-black -mt-0.5">10</span>
+                <span className="text-[9px] font-bold -mt-0.5">10</span>
               </button>
             </div>
 
-            {/* Bottom Info + Seekbar + Controls */}
-            <div className="relative z-30 p-3 sm:p-5 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-auto space-y-2.5 mt-auto">
-              {/* Info overlay */}
-              <div className="max-w-xl">
-                <span className="block text-[10px] font-black tracking-[0.18em] text-emerald-400 uppercase">
-                  YOU'RE WATCHING
-                </span>
-                <h3 className="hidden sm:block text-sm md:text-lg font-black text-white leading-tight uppercase tracking-tight line-clamp-1">
-                  {title}
-                </h3>
-                <p className="hidden md:block text-xs text-zinc-400 line-clamp-1 mt-0.5">
-                  {year}{rating ? ` • ★ ${rating}` : ''}{runtime ? ` • ${runtime}` : ''}{synopsis ? ` • ${synopsis}` : ''}
-                </p>
+            {/* Bottom HUD + Floating Control Popover */}
+            <div className="relative z-30 px-4 sm:px-7 pb-4 sm:pb-6 pt-10 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-auto mt-auto">
+              {/* Bottom-Left Info Overlay + Right-Aligned Skip Intro Pill */}
+              <div className="flex items-end justify-between gap-4 mb-3">
+                <div className="max-w-xl min-w-0">
+                  <span className="block text-[10px] font-black tracking-[0.18em] text-emerald-400 uppercase">
+                    YOU'RE WATCHING
+                  </span>
+
+                  {prefs.pausedInfo !== 'hidden' && (
+                    <>
+                      {titleLogoUrl ? (
+                        <img
+                          src={titleLogoUrl}
+                          alt={title}
+                          className="hidden sm:block max-h-14 md:max-h-20 w-auto object-contain object-left my-1.5 drop-shadow-[0_6px_20px_rgba(0,0,0,0.85)]"
+                        />
+                      ) : (
+                        <h3 className="hidden sm:block text-base md:text-xl font-black text-white leading-tight uppercase tracking-tight line-clamp-1 mt-0.5">
+                          {title}
+                        </h3>
+                      )}
+
+                      {prefs.pausedInfo === 'full' && (
+                        <>
+                          <p className="hidden md:block text-xs text-zinc-200 font-semibold mt-0.5">
+                            {year}
+                            {rating ? ` • ★ ${rating}` : ''}
+                            {runtime ? ` • ${runtime}` : ''}
+                          </p>
+                          {synopsis && (
+                            <p className="hidden md:block text-xs text-zinc-400 line-clamp-2 mt-1 max-w-lg leading-relaxed">
+                              {synopsis}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {prefs.showSkipIntro && duration > 180 && currentTime < 300 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      skipTime(85, 'Melewati Intro (+85 dtk)');
+                    }}
+                    className="flex-none px-4 py-2 rounded-full bg-white hover:bg-zinc-200 text-black text-xs font-bold shadow-2xl flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <span>Lewati Intro</span>
+                    <FastForward className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                )}
               </div>
 
-              {/* Buffered + Played Seekbar */}
-              <div className="flex items-center gap-3">
+              {/* Buffered + Played Seekbar with Hover Timestamp Preview */}
+              <div className="flex items-center gap-3 mb-2.5">
                 <span className="text-[11px] tabular-nums text-zinc-300 min-w-[42px] text-right">
                   {formatTime(currentTime)}
                 </span>
                 <div
-                  className="relative flex-1 h-4 flex items-center cursor-pointer group/seek"
+                  className="relative flex-1 h-5 flex items-center cursor-pointer group/seek"
                   onClick={(e) => e.stopPropagation()}
+                  onMouseMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / Math.max(rect.width, 1)));
+                    setHoverSeek({ pct: pct * 100, time: pct * (duration || 0) });
+                  }}
+                  onMouseLeave={() => setHoverSeek(null)}
                 >
+                  {hoverSeek && duration > 0 && (
+                    <div
+                      className="hidden sm:block absolute -top-8 -translate-x-1/2 px-2 py-0.5 rounded-md bg-black/90 border border-white/15 text-[11px] font-semibold tabular-nums text-white pointer-events-none shadow-lg"
+                      style={{ left: `${hoverSeek.pct}%` }}
+                    >
+                      {formatTime(hoverSeek.time)}
+                    </div>
+                  )}
+
                   <div className="w-full h-1.5 group-hover/seek:h-2 bg-white/15 rounded-full overflow-hidden relative transition-all">
                     <div
                       className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
                       style={{ width: `${bufferedPct}%` }}
                     />
                     <div
-                      className="absolute inset-y-0 left-0 bg-white rounded-full"
-                      style={{ width: `${playedPct}%` }}
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={progressFillStyle}
                     />
                   </div>
                   <input
@@ -839,6 +1193,7 @@ export default function CinemaPlayer({
                       togglePlay();
                     }}
                     className="text-white hover:text-zinc-300 transition-colors"
+                    title={isPlaying ? 'Jeda' : 'Putar'}
                   >
                     {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
                   </button>
@@ -869,13 +1224,14 @@ export default function CinemaPlayer({
                     </button>
                   )}
 
-                  <div className="flex items-center gap-1.5 group/vol">
+                  <div className="flex items-center gap-2 group/vol">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleToggleMute();
                       }}
                       className="text-white hover:text-zinc-300 transition-colors"
+                      title="Bisu / Aktifkan Suara"
                     >
                       {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                     </button>
@@ -895,7 +1251,7 @@ export default function CinemaPlayer({
                         setIsMuted(val === 0);
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-16 h-1 bg-white/25 rounded accent-white hidden group-hover/vol:inline-block"
+                      className="w-0 group-hover/vol:w-16 focus:w-16 opacity-0 group-hover/vol:opacity-100 focus:opacity-100 h-1 bg-white/30 rounded accent-white transition-all duration-200 cursor-pointer"
                     />
                   </div>
 
@@ -906,154 +1262,771 @@ export default function CinemaPlayer({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 relative">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black bg-white/10 text-white border border-white/20">
-                    {activeLevel >= 0 && qualityLevels[activeLevel] ? qualityLevels[activeLevel].label : 'HD/4K'}
-                  </span>
+                {/* Right Quick Control Triggers */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePanel('quality');
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                      panelTab === 'quality'
+                        ? 'bg-white text-black border-white'
+                        : 'bg-white/10 hover:bg-white/20 text-white border-white/15'
+                    }`}
+                    title="Kualitas Video"
+                  >
+                    {activeQualityLabel}
+                  </button>
 
-                  {/* Subtitle selector */}
-                  {subtitles.length > 0 && (
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSubtitleMenu((p) => !p);
-                          setShowSettingsMenu(false);
-                        }}
-                        className={`p-1.5 rounded-lg text-white hover:bg-white/15 transition-colors ${
-                          showSubtitleMenu || activeSubIndex >= 0 ? 'text-emerald-400' : ''
-                        }`}
-                        title="Subtitle (CC)"
-                      >
-                        <Subtitles className="w-4 h-4" />
-                      </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePanel('source');
+                    }}
+                    className={`p-2 rounded-full transition-colors ${
+                      panelTab === 'source'
+                        ? 'bg-white text-black'
+                        : 'text-zinc-200 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Sumber Server"
+                  >
+                    <Layers className="w-4 h-4" />
+                  </button>
 
-                      {showSubtitleMenu && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 bottom-9 z-50 w-44 rounded-xl bg-[#11131a]/95 backdrop-blur-2xl border border-white/15 p-2 shadow-2xl text-xs space-y-1"
-                        >
-                          <div className="px-2 py-1 font-bold text-zinc-400 uppercase text-[10px]">
-                            Subtitle (CC)
-                          </div>
-                          <button
-                            onClick={() => {
-                              setActiveSubIndex(-1);
-                              setShowSubtitleMenu(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left ${
-                              activeSubIndex === -1 ? 'bg-white text-black font-bold' : 'text-zinc-300 hover:bg-white/10'
-                            }`}
-                          >
-                            <span>Nonaktif</span>
-                            {activeSubIndex === -1 && <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          {subtitles.map((sub, idx) => (
-                            <button
-                              key={sub.url || idx}
-                              onClick={() => {
-                                setActiveSubIndex(idx);
-                                setShowSubtitleMenu(false);
-                              }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left ${
-                                activeSubIndex === idx ? 'bg-white text-black font-bold' : 'text-zinc-300 hover:bg-white/10'
-                              }`}
-                            >
-                              <span>{sub.label}</span>
-                              {activeSubIndex === idx && <Check className="w-3.5 h-3.5" />}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePanel('subtitles');
+                    }}
+                    className={`p-2 rounded-full transition-colors ${
+                      panelTab === 'subtitles'
+                        ? 'bg-white text-black'
+                        : activeSubIndex >= 0
+                          ? 'text-emerald-400 hover:bg-white/10'
+                          : 'text-zinc-200 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Subtitle"
+                  >
+                    <Subtitles className="w-4 h-4" />
+                  </button>
 
-                  {/* Settings selector (Quality + Playback Speed) */}
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowSettingsMenu((p) => !p);
-                        setShowSubtitleMenu(false);
-                      }}
-                      className={`p-1.5 rounded-lg text-white hover:bg-white/15 transition-colors ${
-                        showSettingsMenu ? 'bg-white/20' : ''
-                      }`}
-                      title="Kualitas & Kecepatan"
-                    >
-                      <Settings className="w-4 h-4" />
-                    </button>
-
-                    {showSettingsMenu && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute right-0 bottom-9 z-50 w-52 rounded-xl bg-[#11131a]/95 backdrop-blur-2xl border border-white/15 p-3 shadow-2xl text-xs space-y-3"
-                      >
-                        {qualityLevels.length > 0 && (
-                          <div>
-                            <div className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] mb-1.5">
-                              Kualitas Video
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              <button
-                                onClick={() => handleQualityChange(-1)}
-                                className={`px-2 py-1 rounded font-bold ${
-                                  activeLevel === -1 ? 'bg-white text-black' : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                                }`}
-                              >
-                                Auto
-                              </button>
-                              {qualityLevels.map((q) => (
-                                <button
-                                  key={q.index}
-                                  onClick={() => handleQualityChange(q.index)}
-                                  className={`px-2 py-1 rounded font-bold ${
-                                    activeLevel === q.index ? 'bg-white text-black' : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                                  }`}
-                                >
-                                  {q.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div>
-                          <div className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] mb-1.5">
-                            Kecepatan Putar
-                          </div>
-                          <div className="grid grid-cols-5 gap-1">
-                            {[0.75, 1, 1.25, 1.5, 2].map((s) => (
-                              <button
-                                key={s}
-                                onClick={() => handleSpeedChange(s)}
-                                className={`py-1 rounded text-center font-bold ${
-                                  playbackSpeed === s ? 'bg-white text-black' : 'bg-white/10 text-zinc-300 hover:bg-white/20'
-                                }`}
-                              >
-                                {s}x
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePanel('playback');
+                    }}
+                    className={`p-2 rounded-full transition-colors ${
+                      panelTab === 'playback'
+                        ? 'bg-white text-black'
+                        : 'text-zinc-200 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Pemutaran & Tampilan"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
 
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleFullscreen();
                     }}
-                    className="text-white hover:text-zinc-300 transition-colors p-1"
+                    className="p-2 rounded-full text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
                     title={isFullscreen ? 'Keluar Layar Penuh' : 'Layar Penuh'}
                   >
-                    {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                    {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* UNIFIED FLOATING 4-TAB SETTINGS POPOVER / BOTTOM SHEET */}
+          {panelTab && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`fixed sm:absolute bottom-0 sm:bottom-16 inset-x-0 sm:inset-x-auto sm:right-6 z-50 w-full sm:w-[390px] max-h-[75vh] rounded-t-3xl sm:rounded-2xl ${panelSurfaceClass} text-xs text-zinc-200 flex flex-col overflow-hidden animate-modal-pop`}
+            >
+              {/* Mobile drag handle */}
+              <div className="sm:hidden w-10 h-1 rounded-full bg-white/25 mx-auto mt-2.5" />
+
+              {/* Active Status Header */}
+              <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2.5 border-b border-white/[0.08]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded bg-white/15 text-[10px] font-bold text-white uppercase">
+                      {activeStream.type === 'mp4' ? 'MP4' : 'HLS'}
+                    </span>
+                    <span className="font-bold text-white truncate">
+                      {activeStream.label}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[10px] text-zinc-300 font-semibold">
+                      {activeQualityLabel}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                    {activeSubIndex >= 0 && allSubtitles[activeSubIndex]
+                      ? allSubtitles[activeSubIndex].label
+                      : 'Tanpa Subtitle'}{' '}
+                    • {playbackSpeed}× kecepatan
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setPanelTab(null);
+                    setShowAppearanceSub(false);
+                  }}
+                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white flex items-center justify-center flex-none"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* 4-Tab Bar */}
+              <div className="grid grid-cols-4 gap-1 p-2 border-b border-white/[0.08] bg-black/20">
+                {[
+                  { id: 'source', label: 'Sumber', Icon: Layers },
+                  { id: 'quality', label: 'Kualitas', Icon: Film },
+                  { id: 'subtitles', label: 'Subtitle', Icon: Subtitles },
+                  { id: 'playback', label: 'Pemutaran', Icon: Settings },
+                ].map(({ id, label, Icon }) => {
+                  const active = panelTab === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        setPanelTab(id);
+                        setShowAppearanceSub(false);
+                      }}
+                      className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+                        active
+                          ? 'bg-white text-black font-bold shadow-sm'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Panel Body */}
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
+                {/* TAB 1: SUMBER */}
+                {panelTab === 'source' && (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {[
+                          { id: 'all', label: `Semua (${streams.length})` },
+                          { id: 'hls', label: 'HLS' },
+                          { id: 'mp4', label: 'MP4' },
+                        ].map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => setSourceProtoFilter(p.id)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                              sourceProtoFilter === p.id
+                                ? 'bg-white text-black'
+                                : 'bg-white/[0.07] text-zinc-300 hover:bg-white/[0.14]'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {onRetryExtract && !isDubAudio && (
+                        <button
+                          onClick={onRetryExtract}
+                          disabled={isExtracting}
+                          className="px-2.5 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.16] text-[11px] font-semibold text-white flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isExtracting ? 'animate-spin' : ''}`} />
+                          <span>Scan Ulang</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {filteredSources.map((s) => {
+                        const isSelected = s.originalIndex === activeStreamIndex;
+                        return (
+                          <button
+                            key={s.id || s.originalIndex}
+                            onClick={() => onSelectStream?.(s.originalIndex)}
+                            className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between gap-2 text-left transition-all ${
+                              isSelected
+                                ? 'bg-white text-black font-bold shadow-md'
+                                : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold">{s.label}</p>
+                              <p
+                                className={`text-[10px] ${
+                                  isSelected ? 'text-zinc-600' : 'text-zinc-400'
+                                }`}
+                              >
+                                {s.providerLabel || 'HD Server'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-none">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  isSelected
+                                    ? 'bg-black/15 text-black'
+                                    : 'bg-white/10 text-zinc-300'
+                                }`}
+                              >
+                                {s.type === 'mp4' ? 'MP4' : 'HLS'}
+                              </span>
+                              {isSelected && <Check className="w-3.5 h-3.5" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {currentEpisode === 1 && parts.length > 1 && onSelectPart && (
+                      <div className="pt-2 border-t border-white/[0.08]">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">
+                          Bagian Episode 1
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {parts.map((p) => (
+                            <button
+                              key={p.part}
+                              onClick={() => onSelectPart(p.part)}
+                              className={`px-3 py-1 rounded-full text-[11px] font-semibold ${
+                                selectedPart === p.part
+                                  ? 'bg-white text-black'
+                                  : 'bg-white/[0.07] text-zinc-300 hover:bg-white/[0.14]'
+                              }`}
+                            >
+                              {p.name || `Part ${p.part}`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* TAB 2: KUALITAS */}
+                {panelTab === 'quality' && (
+                  <div className="space-y-1.5">
+                    {qualityLevels.length > 0 ? (
+                      <>
+                        <button
+                          onClick={() => handleQualityChange(-1)}
+                          className={`w-full px-3.5 py-2.5 rounded-xl flex items-center justify-between text-left transition-all ${
+                            activeLevel === -1
+                              ? 'bg-white text-black font-bold shadow-md'
+                              : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-xs font-bold">Auto</p>
+                            <p
+                              className={`text-[10px] ${
+                                activeLevel === -1 ? 'text-zinc-600' : 'text-zinc-400'
+                              }`}
+                            >
+                              Menyesuaikan koneksi terbaik secara otomatis
+                            </p>
+                          </div>
+                          {activeLevel === -1 && <Check className="w-4 h-4" />}
+                        </button>
+
+                        {[...qualityLevels]
+                          .sort((a, b) => (b.height || 0) - (a.height || 0))
+                          .map((q) => {
+                            const isSelected = activeLevel === q.index;
+                            const mbps = q.bitrate ? `${(q.bitrate / 1000000).toFixed(1)} Mbps` : '';
+                            const dims = q.width && q.height ? `${q.width}×${q.height}` : '';
+                            return (
+                              <button
+                                key={q.index}
+                                onClick={() => handleQualityChange(q.index)}
+                                className={`w-full px-3.5 py-2.5 rounded-xl flex items-center justify-between text-left transition-all ${
+                                  isSelected
+                                    ? 'bg-white text-black font-bold shadow-md'
+                                    : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200'
+                                }`}
+                              >
+                                <div>
+                                  <p className="text-xs font-bold">{q.label}</p>
+                                  {(mbps || dims) && (
+                                    <p
+                                      className={`text-[10px] ${
+                                        isSelected ? 'text-zinc-600' : 'text-zinc-400'
+                                      }`}
+                                    >
+                                      {[mbps, dims].filter(Boolean).join(' • ')}
+                                    </p>
+                                  )}
+                                </div>
+                                {isSelected && <Check className="w-4 h-4" />}
+                              </button>
+                            );
+                          })}
+                      </>
+                    ) : (
+                      <div className="px-3.5 py-4 rounded-xl bg-white/[0.06] text-center text-zinc-300 space-y-1">
+                        <p className="font-bold text-white">Kualitas HD Bawaan</p>
+                        <p className="text-[11px] text-zinc-400">
+                          Stream langsung diputar pada resolusi terbaik dari server aktif.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3: SUBTITLE (with Live Preview, Size, Color, Background & Upload) */}
+                {panelTab === 'subtitles' && (
+                  <>
+                    {/* Live Preview Box */}
+                    <div className="relative h-24 rounded-xl bg-[#07080c] border border-white/10 flex flex-col justify-end items-center p-3 overflow-hidden">
+                      <span className="absolute top-2 left-2.5 text-[10px] text-zinc-500 font-medium">
+                        Pratinjau
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded font-semibold text-center leading-snug transition-all"
+                        style={{
+                          fontSize: `${Math.round((prefs.subSize / 100) * 13)}px`,
+                          color: prefs.subColor,
+                          backgroundColor: prefs.subBg ? 'rgba(0,0,0,0.75)' : 'transparent',
+                        }}
+                      >
+                        Contoh tampilan subtitle.
+                      </span>
+                    </div>
+
+                    {/* Track List */}
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => setActiveSubIndex(-1)}
+                        className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-left ${
+                          activeSubIndex === -1
+                            ? 'bg-white text-black font-bold'
+                            : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300'
+                        }`}
+                      >
+                        <span>Nonaktif</span>
+                        {activeSubIndex === -1 && <Check className="w-3.5 h-3.5" />}
+                      </button>
+
+                      {allSubtitles.map((sub, idx) => (
+                        <button
+                          key={sub.url || idx}
+                          onClick={() => setActiveSubIndex(idx)}
+                          className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-left ${
+                            activeSubIndex === idx
+                              ? 'bg-white text-black font-bold'
+                              : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200'
+                          }`}
+                        >
+                          <span className="truncate">{sub.label}</span>
+                          {activeSubIndex === idx && <Check className="w-3.5 h-3.5" />}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Font Size, Swatches & Background Toggle */}
+                    <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08] flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => updatePref({ subSize: Math.max(75, prefs.subSize - 15) })}
+                          className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 font-bold text-white"
+                        >
+                          A-
+                        </button>
+                        <span className="w-10 text-center text-[11px] font-semibold tabular-nums">
+                          {prefs.subSize}%
+                        </span>
+                        <button
+                          onClick={() => updatePref({ subSize: Math.min(200, prefs.subSize + 15) })}
+                          className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 font-bold text-white"
+                        >
+                          A+
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {SUB_COLOR_SWATCHES.map((col) => (
+                          <button
+                            key={col}
+                            onClick={() => updatePref({ subColor: col })}
+                            className={`w-5 h-5 rounded-full border-2 transition-transform ${
+                              prefs.subColor === col
+                                ? 'border-white scale-110'
+                                : 'border-transparent opacity-70 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: col }}
+                            title={`Warna subtitle ${col}`}
+                          />
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => updatePref({ subBg: !prefs.subBg })}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                          prefs.subBg
+                            ? 'bg-white text-black'
+                            : 'bg-white/10 text-zinc-300 hover:bg-white/20'
+                        }`}
+                      >
+                        Latar
+                      </button>
+                    </div>
+
+                    {/* Upload Local VTT/SRT */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".vtt,.srt"
+                      onChange={handleSubtitleUpload}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 text-zinc-200 font-semibold flex items-center justify-center gap-2 transition-all"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Subtitle (.VTT / .SRT)</span>
+                    </button>
+                  </>
+                )}
+
+                {/* TAB 4: PEMUTARAN & APPEARANCE SUB-PANEL */}
+                {panelTab === 'playback' && !showAppearanceSub && (
+                  <div className="space-y-3">
+                    {/* Speed Segmented Pill */}
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5">
+                        <span>Kecepatan Putar</span>
+                        <span className="text-white font-semibold">{playbackSpeed}×</span>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                        {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => handleSpeedChange(s)}
+                            className={`py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                              playbackSpeed === s
+                                ? 'bg-white text-black shadow-sm'
+                                : 'text-zinc-300 hover:text-white'
+                            }`}
+                          >
+                            {s}×
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Feature Toggles */}
+                    <div className="space-y-1.5">
+                      <button
+                        onClick={() => updatePref({ showSkipIntro: !prefs.showSkipIntro })}
+                        className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-between text-left"
+                      >
+                        <div>
+                          <p className="font-semibold text-white">Tombol Lewati Intro</p>
+                          <p className="text-[10px] text-zinc-400">
+                            Tampilkan pintasan lewati intro di awal video
+                          </p>
+                        </div>
+                        <span
+                          className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
+                            prefs.showSkipIntro ? 'bg-white justify-end' : 'bg-white/20 justify-start'
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded-full ${
+                              prefs.showSkipIntro ? 'bg-black' : 'bg-white'
+                            }`}
+                          />
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => updatePref({ dataSaver: !prefs.dataSaver })}
+                        className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-between text-left"
+                      >
+                        <div>
+                          <p className="font-semibold text-white">Hemat Kuota</p>
+                          <p className="text-[10px] text-zinc-400">Batasi kualitas Auto maksimal 720p</p>
+                        </div>
+                        <span
+                          className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
+                            prefs.dataSaver ? 'bg-white justify-end' : 'bg-white/20 justify-start'
+                          }`}
+                        >
+                          <span
+                            className={`w-4 h-4 rounded-full ${
+                              prefs.dataSaver ? 'bg-black' : 'bg-white'
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Picture Fit & Audio Boost */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] text-zinc-400 mb-1">Tampilan Video</p>
+                        <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                          {[
+                            { id: 'contain', label: 'Fit' },
+                            { id: 'cover', label: 'Fill' },
+                            { id: 'fill', label: 'Stretch' },
+                          ].map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={() => updatePref({ pictureFit: f.id })}
+                              className={`py-1 rounded-lg text-[10px] font-bold ${
+                                prefs.pictureFit === f.id
+                                  ? 'bg-white text-black'
+                                  : 'text-zinc-300 hover:text-white'
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-zinc-400 mb-1">Penguat Audio</p>
+                        <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                          {[100, 150, 200].map((pct) => (
+                            <button
+                              key={pct}
+                              onClick={() => handleAudioBoostChange(pct)}
+                              className={`py-1 rounded-lg text-[10px] font-bold ${
+                                audioBoost === pct
+                                  ? 'bg-white text-black'
+                                  : 'text-zinc-300 hover:text-white'
+                              }`}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Appearance Personalization Link */}
+                    <button
+                      onClick={() => setShowAppearanceSub(true)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 flex items-center justify-between text-left transition-all"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Palette className="w-4 h-4 text-white" />
+                        <div>
+                          <p className="font-semibold text-white">Tampilan Pemutar</p>
+                          <p className="text-[10px] text-zinc-400">
+                            Warna aksen, panel, gaya seekbar & info jeda
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-zinc-400" />
+                    </button>
+                  </div>
+                )}
+
+                {/* SUB-PANEL: TAMPILAN PEMUTAR */}
+                {panelTab === 'playback' && showAppearanceSub && (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => setShowAppearanceSub(false)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-white hover:text-zinc-300"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>Kembali ke Pemutaran</span>
+                    </button>
+
+                    <div>
+                      <p className="text-[10px] text-zinc-400 mb-1.5">Warna Aksen Seekbar</p>
+                      <div className="flex flex-wrap gap-2">
+                        {ACCENT_SWATCHES.map((col) => (
+                          <button
+                            key={col}
+                            onClick={() => updatePref({ accentColor: col })}
+                            className={`w-6 h-6 rounded-full border-2 transition-transform ${
+                              prefs.accentColor === col
+                                ? 'border-white scale-110 ring-2 ring-white/30'
+                                : 'border-white/20 opacity-80 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: col }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] text-zinc-400 mb-1">Panel Kontrol</p>
+                        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                          {[
+                            { id: 'glass', label: 'Glass' },
+                            { id: 'solid', label: 'Solid' },
+                          ].map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => updatePref({ panelStyle: p.id })}
+                              className={`py-1 rounded-lg text-[10px] font-bold ${
+                                prefs.panelStyle === p.id
+                                  ? 'bg-white text-black'
+                                  : 'text-zinc-300'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-zinc-400 mb-1">Tombol Tengah</p>
+                        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                          {[
+                            { id: 'disc', label: 'Disc' },
+                            { id: 'bare', label: 'Polos' },
+                          ].map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => updatePref({ playBtnStyle: p.id })}
+                              className={`py-1 rounded-lg text-[10px] font-bold ${
+                                prefs.playBtnStyle === p.id
+                                  ? 'bg-white text-black'
+                                  : 'text-zinc-300'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] text-zinc-400 mb-1">Gaya Seekbar</p>
+                      <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                        {[
+                          { id: 'minimal', label: 'Minimal' },
+                          { id: 'glow', label: 'Glow' },
+                          { id: 'gradient', label: 'Gradient' },
+                        ].map((g) => (
+                          <button
+                            key={g.id}
+                            onClick={() => updatePref({ progressStyle: g.id })}
+                            className={`py-1 rounded-lg text-[10px] font-bold ${
+                              prefs.progressStyle === g.id ? 'bg-white text-black' : 'text-zinc-300'
+                            }`}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] text-zinc-400 mb-1">Info Film di Layar</p>
+                      <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-white/[0.06]">
+                        {[
+                          { id: 'full', label: 'Lengkap' },
+                          { id: 'compact', label: 'Ringkas' },
+                          { id: 'hidden', label: 'Minimal' },
+                        ].map((i) => (
+                          <button
+                            key={i.id}
+                            onClick={() => updatePref({ pausedInfo: i.id })}
+                            className={`py-1 rounded-lg text-[10px] font-bold ${
+                              prefs.pausedInfo === i.id ? 'bg-white text-black' : 'text-zinc-300'
+                            }`}
+                          >
+                            {i.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SERIES IN-PLAYER EPISODES DRAWER */}
+          {showEpisodesDrawer && isSeries && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`fixed sm:absolute bottom-0 sm:top-16 sm:bottom-16 inset-x-0 sm:inset-x-auto sm:right-6 z-50 w-full sm:w-[370px] max-h-[75vh] rounded-t-3xl sm:rounded-2xl ${panelSurfaceClass} text-xs text-zinc-200 flex flex-col overflow-hidden animate-modal-pop`}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.08]">
+                <div className="flex items-center gap-2 font-bold text-white">
+                  <ListVideo className="w-4 h-4" />
+                  <span>Daftar Episode ({episodesList.length})</span>
+                </div>
+                <button
+                  onClick={() => setShowEpisodesDrawer(false)}
+                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white flex items-center justify-center"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {validSeasons.length > 1 && onSeasonChange && (
+                <div className="px-3 py-2 border-b border-white/[0.08] flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  {validSeasons.map((s) => (
+                    <button
+                      key={s.id || s.season_number}
+                      onClick={() => onSeasonChange(s.season_number)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap ${
+                        currentSeason === s.season_number
+                          ? 'bg-white text-black'
+                          : 'bg-white/[0.07] text-zinc-300 hover:text-white'
+                      }`}
+                    >
+                      Season {s.season_number}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                {episodesList.map((ep, idx) => {
+                  const epNum = ep.episode_number || ep.episode || idx + 1;
+                  const epTitle = ep.name || ep.title || `Episode ${epNum}`;
+                  const active = epNum === currentEpisode;
+                  return (
+                    <button
+                      key={ep.id || epNum}
+                      onClick={() => {
+                        onEpisodeChange?.(epNum);
+                        setShowEpisodesDrawer(false);
+                      }}
+                      className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between gap-2 text-left transition-all ${
+                        active
+                          ? 'bg-white text-black font-bold shadow-md'
+                          : 'bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">
+                          {epNum}. {epTitle}
+                        </p>
+                      </div>
+                      {active ? <Check className="w-3.5 h-3.5 flex-none" /> : <Play className="w-3 h-3 flex-none opacity-60" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

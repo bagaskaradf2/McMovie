@@ -8,7 +8,53 @@ const KEYS = {
   WATCHLIST: 'mcmovies_watchlist',
   CONTINUE_WATCHING: 'mcmovies_continue_watching',
   SETTINGS: 'mcmovies_settings',
+  PLAYER_PREFS: 'mcmovies_player_prefs',
 };
+
+const VALID_ACCENT_COLORS = new Set([
+  '#ffffff',
+  '#3b82f6',
+  '#ef4444',
+  '#a855f7',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#06b6d4',
+]);
+
+const VALID_SUB_COLORS = new Set(['#ffffff', '#facc15', '#4ade80', '#38bdf8']);
+
+const DEFAULT_PLAYER_PREFS = {
+  accentColor: '#ffffff',
+  panelStyle: 'glass',
+  playBtnStyle: 'disc',
+  progressStyle: 'minimal',
+  pausedInfo: 'full',
+  pictureFit: 'contain',
+  subSize: 120,
+  subColor: '#ffffff',
+  subBg: true,
+  dataSaver: false,
+  showSkipIntro: true,
+};
+
+function sanitizePlayerPrefs(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const subSizeNum = parseInt(String(src.subSize ?? DEFAULT_PLAYER_PREFS.subSize), 10);
+  return {
+    accentColor: VALID_ACCENT_COLORS.has(src.accentColor) ? src.accentColor : DEFAULT_PLAYER_PREFS.accentColor,
+    panelStyle: src.panelStyle === 'solid' ? 'solid' : 'glass',
+    playBtnStyle: src.playBtnStyle === 'bare' ? 'bare' : 'disc',
+    progressStyle: ['minimal', 'glow', 'gradient'].includes(src.progressStyle) ? src.progressStyle : 'minimal',
+    pausedInfo: ['full', 'compact', 'hidden'].includes(src.pausedInfo) ? src.pausedInfo : 'full',
+    pictureFit: ['contain', 'cover', 'fill'].includes(src.pictureFit) ? src.pictureFit : 'contain',
+    subSize: Number.isFinite(subSizeNum) ? Math.min(200, Math.max(75, subSizeNum)) : 120,
+    subColor: VALID_SUB_COLORS.has(src.subColor) ? src.subColor : DEFAULT_PLAYER_PREFS.subColor,
+    subBg: src.subBg !== undefined ? Boolean(src.subBg) : true,
+    dataSaver: Boolean(src.dataSaver),
+    showSkipIntro: src.showSkipIntro !== undefined ? Boolean(src.showSkipIntro) : true,
+  };
+}
 
 const MAX_WATCHLIST_ITEMS = 200;
 const MAX_CONTINUE_WATCHING_ITEMS = 30;
@@ -277,5 +323,17 @@ export const StorageService = {
       autoplay: true,
       autoNext: true,
     };
+  },
+
+  getPlayerPrefs() {
+    const raw = safeParse(safeStorageGet(KEYS.PLAYER_PREFS), DEFAULT_PLAYER_PREFS);
+    return sanitizePlayerPrefs(raw);
+  },
+
+  savePlayerPrefs(patch) {
+    const current = this.getPlayerPrefs();
+    const clean = sanitizePlayerPrefs({ ...current, ...(patch || {}) });
+    safeStorageSet(KEYS.PLAYER_PREFS, JSON.stringify(clean));
+    return clean;
   },
 };

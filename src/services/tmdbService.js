@@ -7,6 +7,38 @@
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
+export const TMDB_GENRE_MAP = {
+  28: 'Action',
+  12: 'Adventure',
+  16: 'Animation',
+  35: 'Comedy',
+  80: 'Crime',
+  99: 'Documentary',
+  18: 'Drama',
+  10751: 'Family',
+  14: 'Fantasy',
+  36: 'History',
+  27: 'Horror',
+  10402: 'Music',
+  9648: 'Mystery',
+  10749: 'Romance',
+  878: 'Sci-Fi',
+  53: 'Thriller',
+  10752: 'War',
+  37: 'Western',
+  10759: 'Action & Adventure',
+  10762: 'Kids',
+  10763: 'News',
+  10764: 'Reality',
+  10765: 'Sci-Fi & Fantasy',
+  10766: 'Soap',
+  10767: 'Talk',
+  10768: 'War & Politics',
+};
+
+const titleLogoCache = new Map();
+const TITLE_LOGO_CACHE_MAX = 150;
+
 const DEFAULT_KEYS = [
   '4e44d9029b1270a757cddc766a1bcb63',
   '2dca580c2a14b55200e784d157207b4d',
@@ -421,5 +453,38 @@ export const TmdbService = {
       language: 'en-US',
     });
     return data;
+  },
+
+  async getTitleLogo(id, mediaType = 'movie') {
+    const cleanId = String(id || '').trim();
+    if (!cleanId || !/^\d+$/.test(cleanId)) return null;
+    const type = mediaType === 'tv' ? 'tv' : 'movie';
+    const key = `${type}_${cleanId}`;
+    if (titleLogoCache.has(key)) {
+      return titleLogoCache.get(key);
+    }
+
+    const data = await tmdbFetch(`/${type}/${cleanId}/images`, {
+      include_image_language: 'en,id,null',
+    });
+    const logos = Array.isArray(data?.logos) ? data.logos : [];
+    const sorted = [...logos].sort((a, b) => {
+      const aPng = String(a.file_path || '').endsWith('.png') ? 1 : 0;
+      const bPng = String(b.file_path || '').endsWith('.png') ? 1 : 0;
+      if (aPng !== bPng) return bPng - aPng;
+      const aEn = a.iso_639_1 === 'en' ? 1 : 0;
+      const bEn = b.iso_639_1 === 'en' ? 1 : 0;
+      if (aEn !== bEn) return bEn - aEn;
+      return (b.vote_average || 0) - (a.vote_average || 0);
+    });
+
+    const best = sorted[0];
+    const logoUrl = best?.file_path ? `${TMDB_IMAGE_BASE}/w500${best.file_path}` : null;
+    if (titleLogoCache.size >= TITLE_LOGO_CACHE_MAX) {
+      const oldest = titleLogoCache.keys().next().value;
+      if (oldest) titleLogoCache.delete(oldest);
+    }
+    titleLogoCache.set(key, logoUrl);
+    return logoUrl;
   },
 };

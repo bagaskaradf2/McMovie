@@ -3,19 +3,13 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Play,
   ChevronLeft,
-  Maximize,
   Bookmark,
   BookmarkCheck,
   Share2,
   Sparkles,
-  Layers,
   Star,
   Check,
-  SkipBack,
-  SkipForward,
-  Tv,
-  RefreshCw,
-  Zap
+  Tv
 } from 'lucide-react';
 
 import { TmdbService } from '../services/tmdbService';
@@ -94,6 +88,7 @@ export default function WatchPage({
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState(null);
   const [extractNonce, setExtractNonce] = useState(0);
+  const [titleLogoUrl, setTitleLogoUrl] = useState(null);
   const [activeStreamIndex, setActiveStreamIndex] = useState(0);
 
   const [isTheaterMode, setIsTheaterMode] = useState(false);
@@ -320,6 +315,24 @@ export default function WatchPage({
         (item.seasons && item.seasons.length > 0) ||
         (Array.isArray(item.episodes) && item.episodes.length > 0))
   );
+
+  // Fetch TMDB PNG Title Logo for paused overlay
+  useEffect(() => {
+    const logoId = item?.tmdbId || (/^\d+$/.test(String(propId)) ? propId : null);
+    if (!logoId) {
+      setTitleLogoUrl(null);
+      return;
+    }
+    let cancelled = false;
+    TmdbService.getTitleLogo(logoId, isSeries ? 'tv' : 'movie')
+      .then((url) => {
+        if (!cancelled) setTitleLogoUrl(url || null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.tmdbId, propId, isSeries]);
 
   // 2. Automatically extract direct CloudX .m3u8/.mp4 streams via /api/extract for pure native playback
   useEffect(() => {
@@ -633,69 +646,11 @@ export default function WatchPage({
 
   const currentActiveStream = directStreams[activeStreamIndex];
   const isPlayingDub = Boolean(item.isDubIndo || currentActiveStream?.provider === 'dubindo');
-  const subtitleBadge = '';
 
   return (
     <div className="min-h-screen bg-[#06070a] text-white selection:bg-white selection:text-black">
-      {/* Topbar */}
-      <header className="sticky top-0 z-40 bg-[#06070a]/90 backdrop-blur-2xl border-b border-white/[0.06] px-4 sm:px-6 lg:px-8 py-3">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 rounded-full hover:bg-white/10 text-white transition-all active:scale-95 flex-none"
-              title="Kembali"
-            >
-              <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-base md:text-lg font-black text-white truncate max-w-xs sm:max-w-md md:max-w-xl">
-                {title}
-              </h1>
-              <p className="text-[11px] sm:text-xs text-zinc-400 font-medium truncate">
-                {year} • {isSeries ? `S${currentSeason} : E${currentEpisode} • ${currentEpTitle}` : runtime}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-none">
-            <button
-              onClick={handleToggleWatchlist}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                isWatchlisted
-                  ? 'bg-amber-400 text-black shadow-md'
-                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
-              }`}
-            >
-              {isWatchlisted ? <BookmarkCheck className="w-3.5 h-3.5 fill-current" /> : <Bookmark className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{isWatchlisted ? 'Tersimpan' : 'Watchlist'}</span>
-            </button>
-
-            <button
-              onClick={handleShare}
-              className="px-3 py-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all"
-            >
-              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{copiedLink ? 'Tersalin!' : 'Bagikan'}</span>
-            </button>
-
-            <button
-              onClick={() => setIsTheaterMode((p) => !p)}
-              className={`p-2 rounded-full text-xs font-semibold transition-all hidden md:flex items-center ${
-                isTheaterMode
-                  ? 'bg-white text-black'
-                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
-              }`}
-              title="Mode Teater Lebar"
-            >
-              <Maximize className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Pure Native Player Container */}
-      <div className={`w-full transition-all duration-300 ${isTheaterMode ? 'px-0 max-w-none' : 'max-w-[1400px] mx-auto px-2 sm:px-4 lg:px-8 pt-3'}`}>
+      {/* Full-Viewport Cinema Player (100dvh, zero external clutter) */}
+      <div className="w-full h-[64vh] sm:h-[82vh] lg:h-[100dvh] bg-black relative">
         <CinemaPlayer
           streams={directStreams}
           activeStreamIndex={activeStreamIndex}
@@ -704,9 +659,11 @@ export default function WatchPage({
           isExtracting={isExtracting}
           extractError={extractError}
           onRetryExtract={() => setExtractNonce((n) => n + 1)}
-          onBackToDetail={() => navigate(`/${isSeries ? 'tv' : 'movie'}/${item.tmdbId || propId}`, { state: { item } })}
+          onBackToDetail={() =>
+            navigate(`/${isSeries ? 'tv' : 'movie'}/${item.tmdbId || propId}`, { state: { item } })
+          }
           title={title}
-          subtitleBadge={subtitleBadge}
+          titleLogoUrl={titleLogoUrl}
           year={year}
           rating={rating}
           runtime={runtime}
@@ -715,137 +672,27 @@ export default function WatchPage({
           isSeries={isSeries}
           currentSeason={currentSeason}
           currentEpisode={currentEpisode}
+          episodesList={episodesList}
+          validSeasons={validSeasons}
+          onSeasonChange={handleSeasonChange}
+          onEpisodeChange={handleEpisodeChange}
           onPrevEpisode={handlePrevEpisode}
           onNextEpisode={handleNextEpisode}
           hasPrevEpisode={currentEpisode > 1}
           hasNextEpisode={currentEpisode < (episodesList.length || 24)}
+          parts={currentEpisode === 1 && item?.parts ? item.parts : []}
+          selectedPart={selectedPart}
+          onSelectPart={(pNum) => setSelectedPart(pNum)}
           onBack={() => navigate(-1)}
           onShare={handleShare}
           isDubAudio={isPlayingDub}
         />
-
-        {/* Next / Prev Episode Controls */}
-        {isSeries && (
-          <div className="mt-3 flex items-center justify-between gap-3 px-1">
-            <button
-              onClick={handlePrevEpisode}
-              disabled={currentEpisode <= 1}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                currentEpisode <= 1
-                  ? 'opacity-40 cursor-not-allowed bg-zinc-900 text-zinc-500'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/10 active:scale-95'
-              }`}
-            >
-              <SkipBack className="w-3.5 h-3.5" />
-              <span>Episode Sebelumnya</span>
-            </button>
-
-            <span className="text-xs font-bold text-zinc-400">
-              Season {currentSeason} • Episode {currentEpisode}
-            </span>
-
-            <button
-              onClick={handleNextEpisode}
-              disabled={currentEpisode >= (episodesList.length || 24)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                currentEpisode >= (episodesList.length || 24)
-                  ? 'opacity-40 cursor-not-allowed bg-zinc-900 text-zinc-500'
-                  : 'bg-white hover:bg-zinc-200 text-black font-bold active:scale-95 shadow-md'
-              }`}
-            >
-              <span>Episode Berikutnya</span>
-              <SkipForward className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* Direct Stream Switcher Bar */}
-        <div className="mt-3.5 px-3 sm:px-4 py-2.5 rounded-2xl bg-[#0a0c14]/90 backdrop-blur-xl border border-white/[0.08] shadow-xl flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mr-1 flex-none">
-              <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Stream Langsung:</span>
-            </span>
-
-            {directStreams.length > 0 ? (
-              directStreams.map((s, idx) => {
-                const isActive = idx === activeStreamIndex;
-                return (
-                  <button
-                    key={s.id || idx}
-                    onClick={() => setActiveStreamIndex(idx)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex-none flex items-center gap-1.5 ${
-                      isActive
-                        ? 'bg-white text-black font-bold shadow-md scale-[1.02]'
-                        : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/[0.08]'
-                    }`}
-                  >
-                    <span>{s.label}</span>
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                        isActive ? 'bg-black/10 text-black' : 'bg-white/10 text-zinc-400'
-                      }`}
-                    >
-                      {s.type === 'hls' ? 'HLS' : 'MP4'}
-                    </span>
-                  </button>
-                );
-              })
-            ) : (
-              <span className="text-xs text-zinc-400">
-                {isExtracting ? 'Memindai server CloudX...' : 'Tidak ada stream aktif'}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 flex-none">
-            {!item.isDubIndo && (
-              <button
-                onClick={() => setExtractNonce((n) => n + 1)}
-                disabled={isExtracting}
-                className="px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isExtracting ? 'animate-spin' : ''}`} />
-                <span>Scan Ulang</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Episode Part Selector Bar (for multi-part local uploads) */}
-        {currentEpisode === 1 && item?.parts && item.parts.length > 1 && (
-          <div className="mt-3 px-4 py-2.5 rounded-2xl bg-[#0e1017] border border-amber-400/20 flex items-center gap-2 overflow-x-auto no-scrollbar shadow-lg">
-            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 flex-none">
-              <Layers className="w-3.5 h-3.5" />
-              <span>Bagian Episode 1:</span>
-            </span>
-            <div className="flex items-center gap-2">
-              {item.parts.map((p) => {
-                const isSelected = selectedPart === p.part;
-                return (
-                  <button
-                    key={p.part}
-                    onClick={() => setSelectedPart(p.part)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      isSelected
-                        ? 'bg-amber-400 text-black font-extrabold shadow-md'
-                        : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
-                    }`}
-                  >
-                    <Play className={`w-3 h-3 ${isSelected ? 'fill-black' : 'fill-zinc-400'}`} />
-                    <span>{p.name || `Part ${p.part}`}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Metadata, Cast, Episode List & Similar Recommendations */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="border-b border-white/[0.08] pb-8">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+      {/* Metadata, Cast, Episode List & Similar Recommendations below full-bleed player */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 py-8 sm:py-12">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap items-center gap-2">
             {isPlayingDub ? (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500 text-black">
                 🇮🇩 Audio Dubbing Indonesia
@@ -865,6 +712,34 @@ export default function WatchPage({
             {runtime && <span className="text-xs font-semibold text-zinc-400">• {runtime}</span>}
           </div>
 
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleWatchlist}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                isWatchlisted
+                  ? 'bg-white text-black shadow-md'
+                  : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10'
+              }`}
+            >
+              {isWatchlisted ? (
+                <BookmarkCheck className="w-3.5 h-3.5 fill-current" />
+              ) : (
+                <Bookmark className="w-3.5 h-3.5" />
+              )}
+              <span>{isWatchlisted ? 'Tersimpan' : 'Watchlist'}</span>
+            </button>
+
+            <button
+              onClick={handleShare}
+              className="px-3.5 py-1.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all"
+            >
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copiedLink ? 'Tersalin!' : 'Bagikan'}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="border-b border-white/[0.08] pb-8">
           <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
             {title}
           </h2>
@@ -1032,6 +907,7 @@ export default function WatchPage({
                 <MovieCard
                   key={sim.id}
                   item={sim}
+                  variant="poster"
                   className="w-full"
                   onClick={(m) => navigate(`/${m.media_type === 'tv' ? 'tv' : 'movie'}/${m.id}`, { state: { item: m } })}
                   onPlay={(m) => navigate(`/watch/${m.media_type === 'tv' ? 'tv' : 'movie'}/${m.id}`, { state: { item: m } })}
