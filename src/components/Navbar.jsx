@@ -53,13 +53,10 @@ export default function Navbar({
         <div className="flex items-center gap-6 lg:gap-8">
           <button
             onClick={() => handleNavClick('home')}
-            className="flex items-center gap-2.5 group text-left flex-none"
+            className="flex items-center group text-left flex-none"
           >
-            <div className="w-8 h-8 rounded-xl bg-white text-black flex items-center justify-center font-black text-xs tracking-tighter shadow-md group-hover:scale-105 transition-transform">
-              MC
-            </div>
-            <span className="text-lg font-bold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
-              McMovies
+            <span className="text-xl font-extrabold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
+              McMovies<span className="text-red-500">.</span>
             </span>
           </button>
 

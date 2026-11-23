@@ -1311,14 +1311,11 @@ export default function App() {
       {/* Clean Minimal Footer */}
       <footer className="mt-auto border-t border-white/[0.08] bg-[#060709] py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-white text-black flex items-center justify-center font-black text-xs tracking-tighter">
-              MC
-            </div>
-            <div>
-              <span className="text-base font-bold tracking-tight text-white">McMovies</span>
-              <p className="text-xs text-zinc-400">Film, Series & Dub Indo HD Streaming</p>
-            </div>
+          <div>
+            <span className="text-lg font-extrabold tracking-tight text-white">
+              McMovies<span className="text-red-500">.</span>
+            </span>
+            <p className="text-xs text-zinc-400">Film, Series & Dub Indo HD Streaming</p>
           </div>
 
           <div className="flex items-center gap-4 text-[11px] text-zinc-500">
