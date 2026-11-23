@@ -1,7 +1,7 @@
 /**
  * TMDB API Service for McMovies
- * Provides live global trending (Nov 2026), real latest Netflix Indonesia releases,
- * movies, TV series, anime, Asian dramas, and clean multi-search.
+ * Provides live global trending, Marvel Cinematic Universe collection, real latest
+ * Netflix Indonesia releases, movies, TV series, anime, Asian dramas, and multi-search.
  */
 
 import { StorageService } from './storageService';
@@ -112,6 +112,45 @@ export const TmdbService = {
 
   async getTrendingWeek(page = 1) {
     return this.getTrending('week', page);
+  },
+
+  /**
+   * Complete Marvel Cinematic Universe theatrical feature films (Iron Man 2008 to latest)
+   */
+  async getMarvelCinematicUniverse() {
+    const today = getTodayISO();
+    const pages = await Promise.all(
+      [1, 2, 3].map((page) =>
+        tmdbFetch('/discover/movie', {
+          with_keywords: '180547',
+          without_genres: '99',
+          'with_runtime.gte': '75',
+          'primary_release_date.lte': today,
+          sort_by: 'release_date.desc',
+          'vote_count.gte': '200',
+          language: 'en-US',
+          page,
+        })
+      )
+    );
+
+    const seen = new Set();
+    const mcu = [];
+
+    for (const data of pages) {
+      for (const raw of data?.results || []) {
+        if (!raw || seen.has(raw.id)) continue;
+        if (/assembled|making of|expanding the universe|disney\+ day/i.test(raw.title || '')) {
+          continue;
+        }
+        const item = { ...raw, media_type: 'movie', badge: 'Marvel MCU', isMcu: true };
+        if (!isCleanMediaItem(item, { allowUnreleased: false })) continue;
+        seen.add(raw.id);
+        mcu.push(item);
+      }
+    }
+
+    return mcu;
   },
 
   /**

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 /**
- * Pure Native CinemaOS HTML5 + HLS.js Player
+ * McMovies HTML5 + HLS.js Player
  * Plays all direct .m3u8 HLS streams and .mp4 streams inside McMovies with zero external iframes.
  */
 export default function CinemaPlayer({
@@ -38,7 +38,7 @@ export default function CinemaPlayer({
   onRetryExtract,
   onBackToDetail,
   title = 'Untitled',
-  subtitleBadge = 'CINEMAOS DIRECT • SUB INDO',
+  subtitleBadge = '',
   year = '',
   rating = '',
   runtime = '',
@@ -196,7 +196,7 @@ export default function CinemaPlayer({
           return;
         }
         if (activeStreamIndex + 1 < streams.length && onSelectStream) {
-          setStatusToast('Server sibuk — beralih ke stream langsung cadangan...');
+          setStatusToast('Server sibuk, beralih ke server cadangan...');
           onSelectStream(activeStreamIndex + 1);
         } else {
           setStreamFailed(true);
@@ -486,14 +486,11 @@ export default function CinemaPlayer({
               <Loader2 className="w-7 h-7 text-white animate-spin" />
             </div>
             <div>
-              <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-2">
-                Pure McMovies Player
-              </span>
               <h3 className="text-base sm:text-lg font-bold text-white leading-snug">
-                Mengekstrak Stream Langsung HD...
+                Memuat Tayangan...
               </h3>
               <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                Menghubungkan pemutar CinemaOS langsung ke server CloudX untuk <b className="text-zinc-200">{title}</b> (100% tanpa player luar & tanpa iklan).
+                Menyiapkan video untuk <b className="text-zinc-200">{title}</b>...
               </p>
             </div>
           </div>
@@ -592,7 +589,7 @@ export default function CinemaPlayer({
             onError={() => {
               if (activeStream.type !== 'mp4') return;
               if (activeStreamIndex + 1 < streams.length && onSelectStream) {
-                setStatusToast('Stream MP4 bermasalah — beralih ke mirror berikutnya...');
+                setStatusToast('Stream bermasalah, beralih ke server cadangan...');
                 onSelectStream(activeStreamIndex + 1);
               } else {
                 setStreamFailed(true);
@@ -683,7 +680,7 @@ export default function CinemaPlayer({
                     {isSeries ? ` • S${currentSeason}:E${currentEpisode}` : ''}
                   </h2>
                   <p className="text-[11px] text-zinc-400 font-medium truncate">
-                    {year ? `${year} • ` : ''}{runtime ? `${runtime} • ` : ''}{activeStream.providerLabel || 'CinemaOS Direct'}
+                    {year ? `${year} • ` : ''}{runtime ? `${runtime} • ` : ''}{activeStream.providerLabel || 'HD Server'}
                   </p>
                 </div>
               </div>
@@ -789,19 +786,19 @@ export default function CinemaPlayer({
               {/* Info overlay (Desktop & tablet) */}
               <div className="hidden md:block max-w-xl">
                 <span className="text-[10px] font-black tracking-[0.18em] text-emerald-400 uppercase">
-                  YOU'RE WATCHING • {subtitleBadge}
+                  YOU'RE WATCHING
                 </span>
                 <h3 className="text-lg font-black text-white leading-tight uppercase tracking-tight line-clamp-1">
                   {title}
                 </h3>
                 <p className="text-xs text-zinc-400 line-clamp-1 mt-0.5">
-                  {year}{rating ? ` • ★ ${rating}` : ''}{runtime ? ` • ${runtime}` : ''}{synopsis ? ` — ${synopsis}` : ''}
+                  {year}{rating ? ` • ★ ${rating}` : ''}{runtime ? ` • ${runtime}` : ''}{synopsis ? ` • ${synopsis}` : ''}
                 </p>
               </div>
 
               {/* Buffered + Played Seekbar */}
               <div className="flex items-center gap-3">
-                <span className="text-[11px] font-mono text-zinc-300 min-w-[42px] text-right">
+                <span className="text-[11px] tabular-nums text-zinc-300 min-w-[42px] text-right">
                   {formatTime(currentTime)}
                 </span>
                 <div
@@ -828,7 +825,7 @@ export default function CinemaPlayer({
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
                 </div>
-                <span className="text-[11px] font-mono text-zinc-400 min-w-[48px]">
+                <span className="text-[11px] tabular-nums text-zinc-400 min-w-[48px]">
                   {formatRemainingTime(currentTime, duration)}
                 </span>
               </div>
@@ -902,9 +899,11 @@ export default function CinemaPlayer({
                     />
                   </div>
 
-                  <span className="text-[11px] font-bold text-emerald-400 hidden sm:inline">
-                    {isDubAudio ? '🇮🇩 Audio Dubbing Indonesia' : '⚡ Pure Native Player'}
-                  </span>
+                  {isDubAudio && (
+                    <span className="text-[11px] font-bold text-emerald-400 hidden sm:inline">
+                      🇮🇩 Dub Indo
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 relative">
@@ -980,7 +979,7 @@ export default function CinemaPlayer({
                       className={`p-1.5 rounded-lg text-white hover:bg-white/15 transition-colors ${
                         showSettingsMenu ? 'bg-white/20' : ''
                       }`}
-                      title="Pengaturan Kualitas & Kecepatan"
+                      title="Kualitas & Kecepatan"
                     >
                       <Settings className="w-4 h-4" />
                     </button>

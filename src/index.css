@@ -1,12 +1,23 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-sans: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-mono: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --color-cinema-bg: #060709;
   --color-cinema-surface: #0e1015;
   --color-cinema-card: #13161f;
   --color-cinema-card-hover: #1b202c;
   --color-cinema-border: rgba(255, 255, 255, 0.08);
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+kbd {
+  font-family: var(--font-sans);
 }
 
 body {
@@ -18,6 +29,11 @@ body {
   padding: 0;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
+}
+
+.rail-lazy {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 380px;
 }
 
 /* Custom sleek scrollbar */

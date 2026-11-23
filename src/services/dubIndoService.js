@@ -311,6 +311,121 @@ export const DubIndoService = {
   },
 
   /**
+   * Maps raw curated Dub Indo movie entries against stream sources & TMDB metadata.
+   */
+  _mapCuratedMovies(candidates, sources, tmdbMap) {
+    const seenIds = new Set();
+    const seenTitles = new Set();
+    const mapped = [];
+
+    for (const item of candidates) {
+      const rawId = String(item.id || item.url || '');
+      if (!rawId || seenIds.has(rawId)) continue;
+      if (isJunkContent(item.title, item.duration)) continue;
+
+      const rawStreamUrl = sources[rawId] || sources[String(item.url)] || null;
+      if (!rawStreamUrl) continue;
+
+      const cleanName = cleanTitle(item.title);
+      const year = extractYear(item.title) || '2024';
+
+      const normalizedKey = `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${year}`;
+      if (seenTitles.has(normalizedKey)) continue;
+      seenTitles.add(normalizedKey);
+      seenIds.add(rawId);
+
+      const mapEntry = tmdbMap[rawId] || null;
+      if (!mapEntry?.poster_path) continue;
+
+      const tmdbId = mapEntry?.tmdbId || null;
+      const embedToken =
+        mapEntry?.token ||
+        (item.slug
+          ? (item.slug.match(/_([a-zA-Z0-9]+)$/) || [])[1]
+          : item.url
+            ? (item.url.match(/_([a-zA-Z0-9]+)\.html/) || [])[1]
+            : null);
+      const resolvedStream = resolveStreamUrl(rawStreamUrl);
+      const mirrors = getStreamMirrors(rawStreamUrl, embedToken);
+
+      const cleanThumb = (item.thumbnail || '')
+        .replace('https://stream.dubbindo.site/', 'https://ik.imagekit.io/uvideo/')
+        .replace('http://stream.dubbindo.site/', 'https://ik.imagekit.io/uvideo/');
+
+      const tmdbPoster = mapEntry?.poster_path
+        ? mapEntry.poster_path.startsWith('http')
+          ? mapEntry.poster_path
+          : `https://image.tmdb.org/t/p/w342${mapEntry.poster_path}`
+        : cleanThumb;
+
+      const tmdbBackdrop = mapEntry?.backdrop_path
+        ? mapEntry.backdrop_path.startsWith('http')
+          ? mapEntry.backdrop_path
+          : `https://image.tmdb.org/t/p/w1280${mapEntry.backdrop_path}`
+        : cleanThumb;
+
+      mapped.push({
+        id: `dub_${rawId}`,
+        rawId,
+        title: mapEntry?.title || cleanName,
+        rawTitle: item.title,
+        year: mapEntry?.year || year,
+        release_date: (mapEntry?.year || year) ? `${mapEntry?.year || year}-01-01` : '',
+        duration: item.duration || '1j 45m',
+        views: item.views || 0,
+        thumbnail: cleanThumb,
+        poster_path: tmdbPoster,
+        backdrop_path: tmdbBackdrop,
+        description:
+          mapEntry?.overview ||
+          cleanDescription(item.description) ||
+          `Saksikan film ${cleanName} dalam audio Dubbing Bahasa Indonesia resmi kualitas HD.`,
+        isDubIndo: true,
+        media_type: 'movie',
+        category: 'Dub Indo Movie',
+        vote_average: mapEntry?.vote_average
+          ? parseFloat(Number(mapEntry.vote_average).toFixed(1))
+          : item.views > 20000
+            ? 8.8
+            : 8.4,
+        streamUrl: resolvedStream,
+        streamBackupUrl: mirrors.length > 1 ? mirrors[1].url : resolvedStream,
+        mirrors,
+        isDirectPlayable: true,
+        tmdbId,
+        embedToken,
+      });
+    }
+
+    mapped.sort((a, b) => {
+      const aHasPoster = a.poster_path && a.poster_path.includes('tmdb.org') ? 1 : 0;
+      const bHasPoster = b.poster_path && b.poster_path.includes('tmdb.org') ? 1 : 0;
+      if (aHasPoster !== bHasPoster) return bHasPoster - aHasPoster;
+      return (b.views || 0) - (a.views || 0);
+    });
+
+    return mapped;
+  },
+
+  /**
+   * Lightweight Home-screen Dub Indo loader: fetches only top.json (194 KB) + maps,
+   * avoiding multi-MB popular.json downloads until the user opens the Dub Indo tab.
+   */
+  async getQuickHomeMovies(limit = 20) {
+    if (isCuratedMoviesReady && curatedMoviesCache.length > 0) {
+      return curatedMoviesCache.slice(0, limit);
+    }
+
+    const [sources, tmdbMap, topList] = await Promise.all([
+      this.getStreamSources(),
+      this.getDubTmdbMap(),
+      loadJson('top.json'),
+    ]);
+
+    return this._mapCuratedMovies(topList, sources, tmdbMap).slice(0, limit);
+  },
+
+  /**
    * Loads Top Videos from dubbindo.site/top and verified curated full movies.
    * Supports both Cloudflare CDN and Indodub Wasabi mirrors.
    */
@@ -333,91 +448,11 @@ export const DubIndoService = {
       loadJson('popular.json'),
     ]);
 
-    const seenIds = new Set();
-    const seenTitles = new Set();
-    const curated = [];
-
-    const allCandidates = [
-      ...topList,
-      ...disneyList,
-      ...boxOfficeList,
-      ...netflixList,
-      ...popularList
-    ];
-
-    allCandidates.forEach(item => {
-      const rawId = String(item.id || item.url || '');
-      if (!rawId || seenIds.has(rawId)) return;
-
-      // Filter out shorts, AI memes, and sub-35min clips
-      if (isJunkContent(item.title, item.duration)) return;
-
-      const rawStreamUrl = sources[rawId] || sources[String(item.url)] || null;
-      if (!rawStreamUrl) return;
-
-      const cleanName = cleanTitle(item.title);
-      const year = extractYear(item.title) || '2024';
-
-      // Deduplicate identical movies by normalized title and year
-      const normalizedKey = `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${year}`;
-      if (seenTitles.has(normalizedKey)) return;
-      seenTitles.add(normalizedKey);
-
-      seenIds.add(rawId);
-
-      const mapEntry = tmdbMap[rawId] || null;
-      // Require genuine TMDB poster so Dub Indo grid never renders blank dark cards
-      if (!mapEntry?.poster_path) return;
-      const tmdbId = mapEntry?.tmdbId || null;
-      const embedToken = mapEntry?.token || (item.slug ? (item.slug.match(/_([a-zA-Z0-9]+)$/) || [])[1] : (item.url ? (item.url.match(/_([a-zA-Z0-9]+)\.html/) || [])[1] : null));
-      const resolvedStream = resolveStreamUrl(rawStreamUrl);
-      const mirrors = getStreamMirrors(rawStreamUrl, embedToken);
-
-      const cleanThumb = (item.thumbnail || '')
-        .replace('https://stream.dubbindo.site/', 'https://ik.imagekit.io/uvideo/')
-        .replace('http://stream.dubbindo.site/', 'https://ik.imagekit.io/uvideo/');
-
-      const tmdbPoster = mapEntry?.poster_path
-        ? (mapEntry.poster_path.startsWith('http') ? mapEntry.poster_path : `https://image.tmdb.org/t/p/w500${mapEntry.poster_path}`)
-        : cleanThumb;
-
-      const tmdbBackdrop = mapEntry?.backdrop_path
-        ? (mapEntry.backdrop_path.startsWith('http') ? mapEntry.backdrop_path : `https://image.tmdb.org/t/p/original${mapEntry.backdrop_path}`)
-        : cleanThumb;
-
-      curated.push({
-        id: `dub_${rawId}`,
-        rawId,
-        title: mapEntry?.title || cleanName,
-        rawTitle: item.title,
-        year: mapEntry?.year || year,
-        release_date: (mapEntry?.year || year) ? `${mapEntry?.year || year}-01-01` : '',
-        duration: item.duration || '1j 45m',
-        views: item.views || 0,
-        thumbnail: cleanThumb,
-        poster_path: tmdbPoster,
-        backdrop_path: tmdbBackdrop,
-        description: mapEntry?.overview || cleanDescription(item.description) || `Saksikan film ${cleanName} dalam audio Dubbing Bahasa Indonesia resmi kualitas HD.`,
-        isDubIndo: true,
-        media_type: 'movie',
-        category: 'Dub Indo Movie',
-        vote_average: mapEntry?.vote_average ? parseFloat(Number(mapEntry.vote_average).toFixed(1)) : (item.views > 20000 ? 8.8 : 8.4),
-        streamUrl: resolvedStream,
-        streamBackupUrl: mirrors.length > 1 ? mirrors[1].url : resolvedStream,
-        mirrors,
-        isDirectPlayable: true,
-        tmdbId,
-        embedToken,
-      });
-    });
-
-    // Prioritize movies with genuine TMDB posters first so the catalog is never blank
-    curated.sort((a, b) => {
-      const aHasPoster = a.poster_path && a.poster_path.includes('tmdb.org') ? 1 : 0;
-      const bHasPoster = b.poster_path && b.poster_path.includes('tmdb.org') ? 1 : 0;
-      if (aHasPoster !== bHasPoster) return bHasPoster - aHasPoster;
-      return (b.views || 0) - (a.views || 0);
-    });
+    const curated = this._mapCuratedMovies(
+      [...topList, ...disneyList, ...boxOfficeList, ...netflixList, ...popularList],
+      sources,
+      tmdbMap
+    );
 
     curatedMoviesCache = curated;
     isCuratedMoviesReady = true;
@@ -500,10 +535,10 @@ export const DubIndoService = {
         const year = extractYear(found.title) || mapEntry?.year || '2024';
 
         const tmdbPoster = mapEntry?.poster_path
-          ? (mapEntry.poster_path.startsWith('http') ? mapEntry.poster_path : `https://image.tmdb.org/t/p/w500${mapEntry.poster_path}`)
+          ? (mapEntry.poster_path.startsWith('http') ? mapEntry.poster_path : `https://image.tmdb.org/t/p/w342${mapEntry.poster_path}`)
           : null;
         const tmdbBackdrop = mapEntry?.backdrop_path
-          ? (mapEntry.backdrop_path.startsWith('http') ? mapEntry.backdrop_path : `https://image.tmdb.org/t/p/original${mapEntry.backdrop_path}`)
+          ? (mapEntry.backdrop_path.startsWith('http') ? mapEntry.backdrop_path : `https://image.tmdb.org/t/p/w1280${mapEntry.backdrop_path}`)
           : null;
         const cleanThumb = (found.thumbnail || '')
           .replace('https://stream.dubbindo.site/', 'https://ik.imagekit.io/uvideo/')
@@ -634,11 +669,11 @@ export const DubIndoService = {
 
       const tmdbPoster = grp.mapEntry.poster_path.startsWith('http')
         ? grp.mapEntry.poster_path
-        : `https://image.tmdb.org/t/p/w500${grp.mapEntry.poster_path}`;
+        : `https://image.tmdb.org/t/p/w342${grp.mapEntry.poster_path}`;
       const tmdbBackdrop = grp.mapEntry.backdrop_path
         ? (grp.mapEntry.backdrop_path.startsWith('http')
             ? grp.mapEntry.backdrop_path
-            : `https://image.tmdb.org/t/p/original${grp.mapEntry.backdrop_path}`)
+            : `https://image.tmdb.org/t/p/w1280${grp.mapEntry.backdrop_path}`)
         : tmdbPoster;
 
       grp.episodes.sort((a, b) => {

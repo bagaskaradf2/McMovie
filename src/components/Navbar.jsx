@@ -3,7 +3,6 @@ import {
   Search,
   Bookmark,
   History,
-  Settings,
   Menu,
   X
 } from 'lucide-react';
@@ -14,7 +13,6 @@ export default function Navbar({
   onOpenSearch,
   onOpenWatchlist,
   onOpenHistory,
-  onOpenSettings,
   watchlistCount = 0,
   historyCount = 0,
 }) {
@@ -31,7 +29,7 @@ export default function Navbar({
     { id: 'home', label: 'Beranda' },
     { id: 'movies', label: 'Film' },
     { id: 'series', label: 'Series' },
-    { id: 'indonesia', label: 'Indonesia & Netflix', badge: '2026' },
+    { id: 'indonesia', label: 'Indonesia & Netflix', badge: String(new Date().getFullYear()) },
     { id: 'asia', label: 'Anime & Asia' },
     { id: 'dubindo', label: 'Dub Indo' },
   ];
@@ -133,14 +131,6 @@ export default function Navbar({
                 {historyCount}
               </span>
             )}
-          </button>
-
-          <button
-            onClick={onOpenSettings}
-            className="w-8 h-8 rounded-full bg-zinc-900/85 hover:bg-zinc-800 border border-white/[0.08] text-zinc-300 hover:text-white transition-all flex items-center justify-center"
-            title="Pengaturan"
-          >
-            <Settings className="w-4 h-4" />
           </button>
 
           <button

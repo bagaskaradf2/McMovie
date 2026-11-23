@@ -79,7 +79,7 @@ export default function DetailPage({ type: propType }) {
                   episode_number: epNum,
                   name: `Episode ${epNum}`,
                   overview: epNum === 1 && fullItem.parts?.length > 0
-                    ? `Episode 1 lengkap durasi penuh (Part 1, Part 2, Part 3) kualitas HD tanpa iklan.`
+                    ? `Episode 1 lengkap durasi penuh kualitas HD.`
                     : `Episode ${epNum} dari serial ${fullItem.title || 'Serial'} durasi penuh.`,
                   still_path: fullItem.backdrop_path || fullItem.poster_path
                 };

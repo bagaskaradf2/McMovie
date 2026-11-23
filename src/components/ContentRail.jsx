@@ -2,12 +2,14 @@ import React, { useRef } from 'react';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import MovieCard from './MovieCard';
 
-export default function ContentRail({
+function ContentRail({
   title,
   subtitle,
   items = [],
   loading = false,
   showRank = false,
+  eager = false,
+  headerRight = null,
   onMovieClick,
   onPlayClick,
   watchlistIds = new Set(),
@@ -29,12 +31,16 @@ export default function ContentRail({
   if (!loading && (!items || items.length === 0)) return null;
 
   return (
-    <section className="relative my-8 sm:my-10 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
+    <section
+      className={`relative my-8 sm:my-10 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto ${
+        eager ? '' : 'rail-lazy'
+      }`}
+    >
       {/* Section Header */}
-      <div className="flex items-end justify-between mb-4 gap-4">
-        <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-end justify-between mb-4 gap-3">
+        <div className="flex items-start gap-3 min-w-0">
           <div className="w-1 h-6 sm:h-7 rounded-full bg-white mt-0.5 flex-none" />
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white leading-tight">
               {title}
             </h2>
@@ -46,7 +52,9 @@ export default function ContentRail({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-none">
+        <div className="flex items-center gap-2.5 flex-none">
+          {headerRight}
+
           {onExploreMore && (
             <button
               onClick={onExploreMore}
@@ -109,3 +117,5 @@ export default function ContentRail({
     </section>
   );
 }
+
+export default React.memo(ContentRail);

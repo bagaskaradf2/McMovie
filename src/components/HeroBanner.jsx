@@ -4,6 +4,7 @@ import { TmdbService } from '../services/tmdbService';
 
 export default function HeroBanner({
   items = [],
+  trendingLabel = 'TRENDING',
   onPlayClick,
   onInfoClick,
   watchlistIds = new Set(),
@@ -33,15 +34,16 @@ export default function HeroBanner({
   const rawBackdrop = current.backdrop_path || current.thumbnail;
   const backdropUrl = current.isDubIndo
     ? current.thumbnail || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1280&auto=format&fit=crop&q=80'
-    : TmdbService.getBackdropUrl(rawBackdrop, 'original');
+    : TmdbService.getBackdropUrl(rawBackdrop, 'w1280');
 
   const releaseDate = current.release_date || current.first_air_date || '';
-  const year = releaseDate ? releaseDate.slice(0, 4) : (current.year || '2026');
+  const year = releaseDate ? releaseDate.slice(0, 4) : (current.year || String(new Date().getFullYear()));
   const rating = current.vote_average ? Number(current.vote_average).toFixed(1) : '8.2';
-  const overview =
+  const rawOverview =
     current.overview ||
     current.description ||
-    'Saksikan tayangan streaming terbaik kualitas HD & 4K langsung di pemutar CinemaOS McMovies tanpa iklan.';
+    'Saksikan film dan serial pilihan kualitas HD langsung di McMovies.';
+  const overview = rawOverview.replace(/\s*—\s*/g, ' - ');
   const isSaved = watchlistIds.has(String(current.id));
   const isSeries = current.media_type === 'tv' || current.category === 'Film Series';
 
@@ -53,6 +55,8 @@ export default function HeroBanner({
           key={backdropUrl}
           src={backdropUrl}
           alt={title}
+          fetchPriority="high"
+          decoding="async"
           className="w-full h-full object-cover object-center filter brightness-[0.78] transition-opacity duration-700"
           onError={(e) => {
             e.target.onerror = null;
@@ -90,7 +94,7 @@ export default function HeroBanner({
           <div className="flex flex-wrap items-center gap-2 mb-3.5">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide bg-white/15 text-white border border-white/15 backdrop-blur-md">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span>TRENDING #{safeIdx + 1} • NOV 2026</span>
+              <span>{trendingLabel} #{safeIdx + 1}</span>
             </span>
 
             {current.isDubIndo ? (
@@ -156,7 +160,7 @@ export default function HeroBanner({
             const isActive = idx === safeIdx;
             const thumbUrl = item.isDubIndo
               ? item.thumbnail || ''
-              : TmdbService.getImageUrl(item.backdrop_path || item.poster_path, 'w500');
+              : TmdbService.getImageUrl(item.backdrop_path || item.poster_path, 'w300');
 
             return (
               <button

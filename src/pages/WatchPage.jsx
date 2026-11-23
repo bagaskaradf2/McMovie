@@ -15,7 +15,6 @@ import {
   SkipForward,
   Tv,
   RefreshCw,
-  ShieldCheck,
   Zap
 } from 'lucide-react';
 
@@ -42,6 +41,7 @@ function cleanSynopsis(text) {
     .replace(/https?:\/\/\S+/gi, '')
     .replace(/Download\s*:\s*$/gi, '')
     .replace(/Download\s*:/gi, '')
+    .replace(/\s*—\s*/g, ' - ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -580,7 +580,7 @@ export default function WatchPage({
       <div className="w-full h-screen bg-[#060709] flex flex-col items-center justify-center text-zinc-400">
         <div className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white animate-spin mb-4" />
         <p className="text-sm font-semibold tracking-wide text-zinc-300 animate-pulse">
-          Menyiapkan Pemutar CinemaOS...
+          Memuat tayangan...
         </p>
       </div>
     );
@@ -633,11 +633,7 @@ export default function WatchPage({
 
   const currentActiveStream = directStreams[activeStreamIndex];
   const isPlayingDub = Boolean(item.isDubIndo || currentActiveStream?.provider === 'dubindo');
-  const subtitleBadge = isPlayingDub
-    ? 'AUDIO DUBBING INDONESIA'
-    : currentActiveStream?.provider === 'moviebox'
-      ? 'MOVIEBOX DIRECT HD'
-      : 'CINEMAOS DIRECT • SUB INDO';
+  const subtitleBadge = '';
 
   return (
     <div className="min-h-screen bg-[#06070a] text-white selection:bg-white selection:text-black">
@@ -657,7 +653,7 @@ export default function WatchPage({
                 {title}
               </h1>
               <p className="text-[11px] sm:text-xs text-zinc-400 font-medium truncate">
-                {year} • {isSeries ? `S${currentSeason} : E${currentEpisode} — ${currentEpTitle}` : runtime} • Pure CinemaOS
+                {year} • {isSeries ? `S${currentSeason} : E${currentEpisode} • ${currentEpTitle}` : runtime}
               </p>
             </div>
           </div>
@@ -803,11 +799,6 @@ export default function WatchPage({
           </div>
 
           <div className="flex items-center gap-2 flex-none">
-            <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-[11px] font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Pure McMovies Player • Tanpa Iklan</span>
-            </span>
-
             {!item.isDubIndo && (
               <button
                 onClick={() => setExtractNonce((n) => n + 1)}

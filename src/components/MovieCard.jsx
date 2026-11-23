@@ -9,13 +9,15 @@ function getProviderDotColor(badgeText) {
   if (b.includes('idlix')) return 'bg-emerald-400';
   if (b.includes('lk21') || b.includes('layarkaca')) return 'bg-blue-400';
   if (b.includes('ngefilm')) return 'bg-indigo-400';
-  if (b.includes('pusatfilm') || b.includes('savefilm')) return 'bg-violet-400';
+  if (b.includes('pusat')) return 'bg-violet-400';
+  if (b.includes('savefilm')) return 'bg-amber-400';
+  if (b.includes('wgfilm')) return 'bg-cyan-400';
   if (b.includes('moviebox')) return 'bg-amber-400';
   if (b.includes('sflix')) return 'bg-sky-400';
   return 'bg-zinc-300';
 }
 
-export default function MovieCard({
+function MovieCard({
   item,
   rank,
   onClick,
@@ -24,9 +26,9 @@ export default function MovieCard({
   onToggleWatchlist,
   className = 'flex-none w-[150px] sm:w-[180px] md:w-[200px]',
 }) {
-  if (!item) return null;
-
   const [imageError, setImageError] = useState(false);
+
+  if (!item) return null;
 
   const title = item.title || item.name || 'Untitled';
   const rawPoster = item.poster_path || item.poster || item.tmdbPoster || item.thumbnail || item.cover || item.image;
@@ -42,7 +44,7 @@ export default function MovieCard({
     } else if (rawPoster.startsWith('/images/') || rawPoster.startsWith('./images/')) {
       posterUrl = rawPoster;
     } else {
-      posterUrl = TmdbService.getImageUrl(rawPoster, 'w500');
+      posterUrl = TmdbService.getImageUrl(rawPoster, 'w342');
     }
   }
 
@@ -70,6 +72,7 @@ export default function MovieCard({
 
   const badgeText = item.badge || (item.isDubIndo ? 'Dub Indo' : '');
   const isNetflixBadge = /netflix/i.test(badgeText);
+  const isMarvelBadge = /marvel|mcu/i.test(badgeText);
   const isDubBadge = item.isDubIndo || /dub\s*indo/i.test(badgeText);
 
   return (
@@ -115,6 +118,7 @@ export default function MovieCard({
             src={posterUrl}
             alt={title}
             loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={() => setImageError(true)}
           />
@@ -127,6 +131,10 @@ export default function MovieCard({
           {isNetflixBadge ? (
             <span className="px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide bg-red-600/95 text-white shadow-md">
               {badgeText}
+            </span>
+          ) : isMarvelBadge ? (
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide bg-red-600/90 text-white border border-red-400/30 shadow-md">
+              MCU
             </span>
           ) : isDubBadge ? (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-400/35 backdrop-blur-md">
@@ -210,3 +218,5 @@ export default function MovieCard({
     </div>
   );
 }
+
+export default React.memo(MovieCard);

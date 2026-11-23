@@ -79,6 +79,23 @@ export default defineConfig({
     tailwindcss(),
     cloudxApiDevPlugin(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/hls.js')) return 'hls';
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router')
+          ) {
+            return 'vendor';
+          }
+          if (id.includes('node_modules/lucide-react')) return 'icons';
+        },
+      },
+    },
+  },
   server: {
     port: 5174,
     host: true,
