@@ -152,40 +152,44 @@ function isJunkContent(title, durationStr) {
   return false;
 }
 
+export function isBrokenUvideoHost(rawUrl) {
+  return Boolean(rawUrl && /uvideoweb/i.test(String(rawUrl)));
+}
+
 /**
  * Resolves raw stream URLs into direct high-speed streams.
- * If the link is uvideoweb, routes through Indodub LiteSpeed redirector
- * which outputs pre-signed Wasabi S3 MP4 streams with CORS enabled!
+ * Filters out uvideoweb links pointing to anti-bot HTML wait pages on files.indodub.my.id.
  */
 export function resolveStreamUrl(rawUrl) {
-  if (!rawUrl) return null;
-  if (rawUrl.includes('uvideoweb')) {
-    const m = rawUrl.match(/uvideoweb\/(.+)$/);
-    if (m) {
-      return `https://files.indodub.my.id/redirect.php?bucket=uvideoweb&url=${encodeURIComponent(m[1]).replace(/%2F/g, '/')}`;
-    }
-  }
+  if (!rawUrl || isBrokenUvideoHost(rawUrl)) return null;
   return rawUrl;
 }
 
 /**
- * Pre-resolves 302 redirect on the client to obtain the direct signed Wasabi S3 URL.
- * Bypasses Chrome CORS and Range header issues on cross-origin redirects!
+ * Pre-resolves 302 redirects on the client to verify direct playable video/* URLs.
+ * Rejects HTML interstitials so WatchPage falls back cleanly to CloudX HLS streams.
  */
 export async function resolveDirectPlayableUrl(rawUrl) {
-  if (!rawUrl) return null;
+  if (!rawUrl || isBrokenUvideoHost(rawUrl)) return null;
   const redirectUrl = resolveStreamUrl(rawUrl);
-  if (redirectUrl && redirectUrl.includes('files.indodub.my.id/redirect.php')) {
+  if (!redirectUrl) return null;
+  if (redirectUrl.includes('files.indodub.my.id/redirect.php')) {
     try {
       const res = await fetch(redirectUrl, {
         method: 'GET',
         headers: { Range: 'bytes=0-10' }
       });
-      if (res.url && res.url !== redirectUrl && res.url.includes('wasabisys.com')) {
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (
+        res.ok &&
+        res.url &&
+        (ct.includes('video') || res.url.includes('wasabisys.com') || res.url.includes('workers.dev'))
+      ) {
         return res.url;
       }
-    } catch (e) {
-      console.warn('Pre-resolving Wasabi direct stream encountered error, using redirect URL:', e);
+      return null;
+    } catch {
+      return null;
     }
   }
   return redirectUrl;
@@ -195,28 +199,10 @@ export async function resolveDirectPlayableUrl(rawUrl) {
  * Generates alternative stream mirrors for high availability
  */
 export function getStreamMirrors(rawUrl) {
-  if (!rawUrl) return [];
+  if (!rawUrl || isBrokenUvideoHost(rawUrl)) return [];
   const mirrors = [];
 
-  if (rawUrl && rawUrl.includes('uvideoweb')) {
-    const m = rawUrl.match(/uvideoweb\/(.+)$/);
-    if (m) {
-      mirrors.push({
-        id: 'dub_direct',
-        name: '🇮🇩 Dubbing Indo (Server Utama)',
-        badge: 'Wasabi S3 Direct',
-        url: `https://files.indodub.my.id/redirect.php?bucket=uvideoweb&url=${encodeURIComponent(m[1]).replace(/%2F/g, '/')}`,
-        isDirect: true,
-      });
-      mirrors.push({
-        id: 'dub_redirect',
-        name: '🇮🇩 Dubbing Indo (Server Cadangan)',
-        badge: 'LiteSpeed Mirror',
-        url: `https://files.indodub.my.id/redirect.php?bucket=uvideoweb&url=${encodeURIComponent(m[1]).replace(/%2F/g, '/')}`,
-        isDirect: true,
-      });
-    }
-  } else if (rawUrl && rawUrl.includes('/upload/videos/')) {
+  if (rawUrl && rawUrl.includes('/upload/videos/')) {
     mirrors.push({
       id: 'dub_direct',
       name: '🇮🇩 Dubbing Indo (Server Utama)',
@@ -224,14 +210,16 @@ export function getStreamMirrors(rawUrl) {
       url: rawUrl,
       isDirect: true,
     });
-    const rel = rawUrl.replace(/^https?:\/\/[^\/]+\//, '');
-    mirrors.push({
-      id: 'dub_redirect',
-      name: '🇮🇩 Dubbing Indo (Server Cadangan)',
-      badge: 'Mirror 1080p',
-      url: `https://files.indodub.my.id/${rel}`,
-      isDirect: true,
-    });
+    if (!rawUrl.includes('stream.dubbindo.site')) {
+      const rel = rawUrl.replace(/^https?:\/\/[^\/]+\//, '');
+      mirrors.push({
+        id: 'dub_redirect',
+        name: '🇮🇩 Dubbing Indo (Server Cadangan)',
+        badge: 'Cloudflare Mirror',
+        url: `https://stream.dubbindo.site/${rel}`,
+        isDirect: true,
+      });
+    }
   }
 
   return mirrors;
@@ -313,7 +301,7 @@ export const DubIndoService = {
       if (isJunkContent(item.title, item.duration)) continue;
 
       const rawStreamUrl = sources[rawId] || sources[String(item.url)] || null;
-      if (!rawStreamUrl) continue;
+      if (!rawStreamUrl || isBrokenUvideoHost(rawStreamUrl)) continue;
 
       const cleanName = cleanTitle(item.title);
       const year = extractYear(item.title) || '2024';
@@ -612,7 +600,7 @@ export const DubIndoService = {
       if (durMins < 10) return;
 
       const rawStream = sources[String(item.id)] || sources[String(item.url)] || null;
-      if (!rawStream) return;
+      if (!rawStream || isBrokenUvideoHost(rawStream)) return;
       const streamUrl = resolveStreamUrl(rawStream);
       if (!streamUrl) return;
 
@@ -766,5 +754,6 @@ export const DubIndoService = {
 
   resolveDirectPlayableUrl,
   resolveStreamUrl,
+  isBrokenUvideoHost,
   getStreamMirrors
 };

@@ -101,9 +101,9 @@ async function enrichCandidateWithTmdb(candidate, keyIndex) {
       const relYear = relDate ? parseInt(relDate.slice(0, 4), 10) : null;
       if (targetYear && relYear) {
         const diff = Math.abs(targetYear - relYear);
+        if (diff > 2) continue;
         if (diff === 0) score += 45;
         else if (diff === 1) score += 25;
-        else if (diff > 3) score -= 55;
       }
 
       if (candidate.isTv && r.media_type === 'tv') score += 16;
@@ -189,9 +189,9 @@ export async function GET(request) {
     const scrapeTargets = [
       { key: 'ngefilm', paths: ['/', '/page/2/'] },
       { key: 'savefilm', paths: ['/', '/page/2/'] },
-      { key: 'pusatmovie', paths: ['/', '/page/2/'] },
+      { key: 'klikxxi', paths: ['/', '/page/2/'] },
+      { key: 'indomax', paths: ['/', '/page/2/'] },
       { key: 'wgfilm21', paths: ['/'] },
-      { key: 'klikxxi', paths: ['/'] },
     ];
 
     const jobs = [];
@@ -214,7 +214,7 @@ export async function GET(request) {
                 Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
               },
-              signal: AbortSignal.timeout(3000),
+              signal: AbortSignal.timeout(5000),
             },
             3
           );

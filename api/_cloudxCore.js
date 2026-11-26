@@ -28,11 +28,16 @@ export const PROVIDER_PRIORITY = [
   'savefilm',
   'klikxxi',
   'indomax',
-  'pusatmovie',
+  'wgfilm21',
   'pusatfilm',
   'filmkita',
-  'wgfilm21',
+  'pusatmovie',
 ];
+
+const ADULT_TITLE_REGEX =
+  /\[[A-Z]{2,6}-\d{2,5}\]|\b(jav|bokep|semi\s*korea|18\+|dewasa|disetubuhi|telanjang|mesum|uncensored|hentai|erotic|xxx)\b/i;
+
+const MIRROR_BRAND_TOKENS = ['ngefilm', 'savefilm', 'indomax', 'klikxxi', 'wgfilm21', 'pusatfilm', 'pencurimovie'];
 
 export const PROVIDER_LABELS = {
   ngefilm: 'Ngefilm',
@@ -130,6 +135,9 @@ const EARNVIDS_LEGACY_HOSTS = [
   'vidhidepre.com',
   'vidhidevip.com',
   'vidhidepro.com',
+  'vidhideplus.com',
+  'vidhidefast.com',
+  'vidhideload.com',
   'fviplions.com',
 ];
 
@@ -319,6 +327,56 @@ function inferSubtitleMeta(url) {
   return { label: 'Subtitle', lang: 'und' };
 }
 
+async function verifyHlsPlayable(stream) {
+  const origin = stream.origin || (stream.referer ? new URL(stream.referer).origin : '');
+  const hdr = { 'User-Agent': USER_AGENT, Referer: stream.referer, ...(origin ? { Origin: origin } : {}) };
+  const pr = await fetch(stream.url, {
+    headers: hdr,
+    signal: AbortSignal.timeout(2500),
+  });
+  if (!pr.ok) return null;
+
+  const masterText = await pr.text();
+  if (!masterText.trimStart().startsWith('#EXTM3U')) return null;
+
+  const lines = masterText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  if (lines.length === 0) return null;
+
+  let mediaText = masterText;
+  let mediaBaseUrl = pr.url || stream.url;
+  const firstEntry = lines[0];
+
+  if (/\.m3u8(\?|$)/i.test(firstEntry) || /#EXT-X-STREAM-INF/i.test(masterText)) {
+    const childUrl = new URL(firstEntry, mediaBaseUrl).href;
+    const cr = await fetch(childUrl, {
+      headers: hdr,
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!cr.ok) return null;
+    mediaText = await cr.text();
+    if (!mediaText.trimStart().startsWith('#EXTM3U')) return null;
+    mediaBaseUrl = cr.url || childUrl;
+  }
+
+  const segLine = mediaText.split(/\r?\n/).map((l) => l.trim()).find((l) => l && !l.startsWith('#'));
+  if (!segLine) return null;
+
+  const segUrl = new URL(segLine, mediaBaseUrl).href;
+  let sr = await fetch(segUrl, {
+    method: 'HEAD',
+    headers: hdr,
+    signal: AbortSignal.timeout(2200),
+  });
+  if (sr.status === 405 || sr.status === 501) {
+    sr = await fetch(segUrl, {
+      method: 'GET',
+      headers: { ...hdr, Range: 'bytes=0-63' },
+      signal: AbortSignal.timeout(2200),
+    });
+  }
+  return sr.ok || sr.status === 206 ? stream : null;
+}
+
 /**
  * Fetches an embed/host page, unpacks Dean Edwards P.A.C.K.E.R scripts, and extracts .m3u8 / .mp4 / .vtt.
  */
@@ -416,18 +474,12 @@ export async function extractDirectMediaFromHost(rawEmbedUrl, referer, { skipVer
       };
     }
 
-    // Fast playability verification so broken HTTP 403/502 streams never win or cut off races
+    // Check HLS variant + first segment health (or direct MP4) so zombie 522/502 streams are filtered out
     const verifiedChecks = await Promise.all(
-      uniqueStreams.slice(0, 3).map(async (s) => {
+      uniqueStreams.slice(0, 4).map(async (s) => {
         try {
           if (s.type === 'hls') {
-            const pr = await fetch(s.url, {
-              headers: { 'User-Agent': USER_AGENT, Referer: s.referer },
-              signal: AbortSignal.timeout(2500),
-            });
-            if (!pr.ok) return null;
-            const body = await pr.text();
-            return body.trimStart().startsWith('#EXTM3U') ? s : null;
+            return await verifyHlsPlayable(s);
           }
           const mr = await fetch(s.url, {
             method: 'HEAD',
@@ -454,8 +506,9 @@ export async function extractDirectMediaFromHost(rawEmbedUrl, referer, { skipVer
 export function normalizeTitleForMatch(raw) {
   return (raw || '')
     .toLowerCase()
-    .replace(/\b(sub\s*indo|subtitle\s*indonesia|dub\s*indo|dubbing\s*indonesia|completed|ongoing|batch|imax|extended|uncut|web-dl|bluray|hd|4k|uhd)\b/gi, ' ')
-    .replace(/\b(season|s)\s*\d+\b/gi, ' ')
+    .replace(/\b(sub\s*indo|subtitle\s*indonesia|subs?\s*indo|dub\s*indo|dubbing\s*indonesia|completed|ongoing|batch|imax|extended|uncut|web-dl|bluray|blu-ray|hd|4k|uhd)\b/gi, ' ')
+    .replace(/\b(?:season|s)\s*-?\s*0*\d+(?:\s*(?:episode|eps?\.?|e)\s*-?\s*0*\d+)?\b/gi, ' ')
+    .replace(/\b(?:episode|eps?\.?)\s*-?\s*0*\d+\b/gi, ' ')
     .replace(/\(\s*(19\d\d|20\d\d)(?:\s*[-–]\s*(19\d\d|20\d\d))?\s*\)/g, ' ')
     .replace(/\b(19\d\d|20\d\d)\b$/g, ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -472,10 +525,27 @@ function extractYears(str) {
   return Array.from(years);
 }
 
+function isDirectEpisodeMatch(candidateTitle, candidateUrl, season = 1, episode = 1) {
+  const corpus = `${candidateTitle || ''} ${candidateUrl || ''}`;
+  const fullMatch = corpus.match(/\b(?:season|s)\s*-?\s*0*(\d+)\s*[-./]?\s*(?:episode|eps?\.?|e)\s*-?\s*0*(\d+)\b/i);
+  if (fullMatch) {
+    return parseInt(fullMatch[1], 10) === parseInt(season, 10) && parseInt(fullMatch[2], 10) === parseInt(episode, 10);
+  }
+  const epOnlyMatch = corpus.match(/\b(?:episode|eps?\.?)\s*-?\s*0*(\d+)\b/i);
+  if (epOnlyMatch) {
+    return parseInt(epOnlyMatch[1], 10) === parseInt(episode, 10);
+  }
+  return false;
+}
+
 /**
- * Strict anti-mismatch scorer (0-100+). Hard-rejects year mismatches and wrong TV seasons.
+ * Strict anti-mismatch scorer (0-100+). Hard-rejects adult spam, year mismatches, and wrong TV seasons/episodes.
  */
-export function scoreTitleMatch(candidateTitle, candidateUrl, targetTitles, targetYear, targetType = 'movie', targetSeason = 1) {
+export function scoreTitleMatch(candidateTitle, candidateUrl, targetTitles, targetYear, targetType = 'movie', targetSeason = 1, targetEpisode = null) {
+  if (ADULT_TITLE_REGEX.test(candidateTitle || '')) {
+    return 0;
+  }
+
   const candYears = extractYears(`${candidateTitle} ${candidateUrl}`);
   const tgtYearNum = targetYear ? parseInt(String(targetYear).slice(0, 4), 10) : null;
 
@@ -483,7 +553,10 @@ export function scoreTitleMatch(candidateTitle, candidateUrl, targetTitles, targ
     const minY = Math.min(...candYears);
     const maxY = Math.max(...candYears);
     if (targetType === 'tv') {
-      if (maxY < tgtYearNum - 1) {
+      const looksLikeSeriesPost =
+        /\/(tv|series|eps)\//i.test(candidateUrl || '') ||
+        /\b(?:season|s|episode|eps)\s*\d+/i.test(`${candidateTitle} ${candidateUrl}`);
+      if (maxY < tgtYearNum - 1 || (!looksLikeSeriesPost && minY > tgtYearNum + 1)) {
         return 0;
       }
     } else {
@@ -541,7 +614,7 @@ export function scoreTitleMatch(candidateTitle, candidateUrl, targetTitles, targ
 
   if (bestScore < 65) return 0;
 
-  const isUrlTv = /\/(tv|series)\//i.test(candidateUrl || '') || /\bseason\s*\d+/i.test(candidateTitle || '');
+  const isUrlTv = /\/(tv|series|eps)\//i.test(candidateUrl || '') || /\bseason\s*\d+/i.test(candidateTitle || '');
   if (targetType === 'movie' && isUrlTv) {
     bestScore -= 50;
   } else if (targetType === 'tv' && isUrlTv) {
@@ -556,13 +629,42 @@ export function scoreTitleMatch(candidateTitle, candidateUrl, targetTitles, targ
       if (candSeason !== sNum) {
         return 0;
       }
-      bestScore += 20;
+      bestScore += 15;
     } else if (sNum === 1) {
       bestScore += 10;
+    }
+
+    if (targetEpisode != null) {
+      const epNum = parseInt(targetEpisode, 10) || 1;
+      const candEpMatch = `${candidateTitle} ${candidateUrl}`.match(/\b(?:episode|eps?\.?)\s*-?\s*0*(\d+)\b/i);
+      if (candEpMatch) {
+        const candEp = parseInt(candEpMatch[1], 10);
+        if (candEp !== epNum) {
+          return 0;
+        }
+        bestScore += 12;
+      }
     }
   }
 
   return bestScore >= 65 ? bestScore : 0;
+}
+
+function rewriteStaleMirrorHost(rawHrefUrl, baseUrl) {
+  try {
+    const parsed = new URL(rawHrefUrl);
+    const base = new URL(baseUrl);
+    if (parsed.host !== base.host) {
+      const brand = MIRROR_BRAND_TOKENS.find((token) => base.hostname.includes(token));
+      if (brand && parsed.hostname.includes(brand)) {
+        parsed.protocol = base.protocol;
+        parsed.host = base.host;
+      }
+    }
+    return parsed.href;
+  } catch {
+    return rawHrefUrl;
+  }
 }
 
 export function parseSearchArticles(html, baseUrl) {
@@ -578,7 +680,8 @@ export function parseSearchArticles(html, baseUrl) {
 
     if (!titleAnchor) continue;
     try {
-      const url = new URL(decodeHtmlEntities(titleAnchor[1]), baseUrl).href;
+      const resolved = new URL(decodeHtmlEntities(titleAnchor[1]), baseUrl).href;
+      const url = rewriteStaleMirrorHost(resolved, baseUrl);
       const title = stripTags(titleAnchor[2]).replace(/^Permalink\s*(?:to|ke)\s*:\s*/i, '');
       if (title && url.startsWith('http')) {
         results.push({ title, url });
@@ -627,7 +730,7 @@ function selectEpisodeUrl(html, baseUrl, season = 1, episode = 1) {
 
       let resolvedUrl = '';
       try {
-        resolvedUrl = new URL(href, baseUrl).href;
+        resolvedUrl = rewriteStaleMirrorHost(new URL(href, baseUrl).href, baseUrl);
       } catch {
         continue;
       }
@@ -737,6 +840,10 @@ export async function extractFromProvider(providerKey, baseUrl, params) {
     queryPool.push(`${baseSearchTitle} Season ${season}`);
   }
   if (baseSearchTitle) queryPool.push(baseSearchTitle);
+  if (type === 'tv' && baseSearchTitle) {
+    queryPool.push(`${baseSearchTitle} Season ${season} Episode ${episode}`);
+    queryPool.push(`${baseSearchTitle} Episode ${episode}`);
+  }
   for (const alt of targetTitles) {
     const cleaned = cleanSearchQuery(alt);
     if (cleaned) queryPool.push(cleaned);
@@ -746,7 +853,8 @@ export async function extractFromProvider(providerKey, baseUrl, params) {
   const searchQueries = [...new Set(queryPool.filter(Boolean))];
 
   const candidateMap = new Map();
-  for (const q of searchQueries.slice(0, 3)) {
+  const maxQueries = type === 'tv' ? 4 : 3;
+  for (const q of searchQueries.slice(0, maxQueries)) {
     try {
       const searchUrl = `${baseUrl}/?s=${encodeURIComponent(q)}&post_type[]=post&post_type[]=tv`;
       const searchRes = await fetchText(searchUrl, { timeoutMs: 3800 });
@@ -754,7 +862,7 @@ export async function extractFromProvider(providerKey, baseUrl, params) {
 
       const articles = parseSearchArticles(searchRes.text, searchRes.url || baseUrl);
       for (const art of articles) {
-        const score = scoreTitleMatch(art.title, art.url, targetTitles, year, type, season);
+        const score = scoreTitleMatch(art.title, art.url, targetTitles, year, type, season, episode);
         if (score > 0) {
           const prev = candidateMap.get(art.url);
           if (!prev || score > prev.score) {
@@ -763,7 +871,8 @@ export async function extractFromProvider(providerKey, baseUrl, params) {
         }
       }
       const bestSoFar = Array.from(candidateMap.values()).sort((a, b) => b.score - a.score)[0];
-      if (bestSoFar && bestSoFar.score >= 95) break;
+      const earlyThreshold = type === 'tv' ? 112 : 95;
+      if (bestSoFar && bestSoFar.score >= earlyThreshold) break;
     } catch {
       // Provider timed out or unreachable
     }
@@ -783,14 +892,17 @@ export async function extractFromProvider(providerKey, baseUrl, params) {
       let pageRes = await fetchText(targetPageUrl, { referer: baseUrl, timeoutMs: 4000 });
       if (!pageRes.text || pageRes.status >= 400) continue;
 
-      // If TV Series, resolve exact season & episode page
+      // If TV Series, resolve exact season & episode page (or accept direct single-episode post matches)
       if (type === 'tv') {
         const epUrl = selectEpisodeUrl(pageRes.text, pageRes.url || targetPageUrl, season, episode);
-        if (!epUrl) continue;
-        if (epUrl !== targetPageUrl) {
-          targetPageUrl = epUrl;
-          pageRes = await fetchText(targetPageUrl, { referer: candidate.url, timeoutMs: 4000 });
-          if (!pageRes.text || pageRes.status >= 400) continue;
+        if (epUrl) {
+          if (epUrl !== targetPageUrl) {
+            targetPageUrl = epUrl;
+            pageRes = await fetchText(targetPageUrl, { referer: candidate.url, timeoutMs: 4000 });
+            if (!pageRes.text || pageRes.status >= 400) continue;
+          }
+        } else if (!isDirectEpisodeMatch(candidate.title, candidate.url, season, episode)) {
+          continue;
         }
       }
 
@@ -807,7 +919,7 @@ export async function extractFromProvider(providerKey, baseUrl, params) {
         const tabIds = [...pageRes.text.matchAll(/<div[^>]*\btab-content-ajax\b[^>]*>/gi)]
           .map((m) => m[0].match(/\bid="([^"]+)"/i)?.[1])
           .filter(Boolean)
-          .slice(0, hasKnownDirectOnPage ? 4 : 6);
+          .slice(0, hasKnownDirectOnPage ? 6 : 8);
 
         await Promise.all(
           tabIds.map(async (tabId) => {

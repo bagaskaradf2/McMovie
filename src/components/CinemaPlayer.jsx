@@ -147,6 +147,7 @@ export default function CinemaPlayer({
   isExtracting = false,
   extractError = null,
   onRetryExtract,
+  onFallbackExtract,
   onBackToDetail,
   title = 'Untitled',
   titleLogoUrl = null,
@@ -179,6 +180,8 @@ export default function CinemaPlayer({
   const controlsTimeoutRef = useRef(null);
   const mediaRecoveryRef = useRef(0);
   const triedProxyRef = useRef(false);
+  const triedDirectRef = useRef(false);
+  const fallbackTriggeredRef = useRef(false);
   const lastTapRef = useRef({ time: 0, side: null });
   const fileInputRef = useRef(null);
   const audioCtxRef = useRef(null);
@@ -279,6 +282,11 @@ export default function CinemaPlayer({
     setDismissedSegKeys(new Set());
   }, [skipSegments]);
 
+  // Reset automatic CloudX fallback guard when navigating to a new title or episode
+  useEffect(() => {
+    fallbackTriggeredRef.current = false;
+  }, [title, currentSeason, currentEpisode]);
+
   // Apply Data Saver (cap HLS auto quality <= 720p)
   useEffect(() => {
     const hls = hlsRef.current;
@@ -333,6 +341,7 @@ export default function CinemaPlayer({
         : activeStream.url;
 
     triedProxyRef.current = Boolean(activeStream.proxyUrl && initialSrc === activeStream.proxyUrl);
+    triedDirectRef.current = Boolean(activeStream.url && initialSrc === activeStream.url);
 
     let destroyed = false;
 
@@ -386,6 +395,16 @@ export default function CinemaPlayer({
           startHls(activeStream.proxyUrl);
           return;
         }
+        if (
+          data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+          !triedDirectRef.current &&
+          activeStream.url &&
+          activeStream.url !== activeStream.proxyUrl
+        ) {
+          triedDirectRef.current = true;
+          startHls(activeStream.url);
+          return;
+        }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveryRef.current < 1) {
           mediaRecoveryRef.current += 1;
           hls.recoverMediaError();
@@ -394,6 +413,10 @@ export default function CinemaPlayer({
         if (activeStreamIndex + 1 < streams.length && onSelectStream) {
           setStatusToast('Server sibuk, beralih ke server cadangan...');
           onSelectStream(activeStreamIndex + 1);
+        } else if (onFallbackExtract && !fallbackTriggeredRef.current) {
+          fallbackTriggeredRef.current = true;
+          setStatusToast('Mencari server alternatif...');
+          onFallbackExtract();
         } else {
           setStreamFailed(true);
           setIsBuffering(false);
@@ -1042,6 +1065,10 @@ export default function CinemaPlayer({
               if (activeStreamIndex + 1 < streams.length && onSelectStream) {
                 setStatusToast('Stream bermasalah, beralih ke server cadangan...');
                 onSelectStream(activeStreamIndex + 1);
+              } else if (onFallbackExtract && !fallbackTriggeredRef.current) {
+                fallbackTriggeredRef.current = true;
+                setStatusToast('Stream langsung gagal, mencari server alternatif...');
+                onFallbackExtract();
               } else {
                 setStreamFailed(true);
                 setIsBuffering(false);

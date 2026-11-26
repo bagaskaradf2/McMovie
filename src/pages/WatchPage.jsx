@@ -92,19 +92,21 @@ export default function WatchPage({
   const [titleLogoUrl, setTitleLogoUrl] = useState(null);
   const [skipSegments, setSkipSegments] = useState([]);
   const [activeStreamIndex, setActiveStreamIndex] = useState(0);
+  const [cloudxFallbackActive, setCloudxFallbackActive] = useState(false);
 
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
+    setCloudxFallbackActive(false);
     if (propSeason) setCurrentSeason(parseInt(propSeason, 10) || 1);
     if (routeInitialEpisode) {
       setCurrentEpisode(parseInt(routeInitialEpisode, 10) || 1);
     } else if (propEpisode) {
       setCurrentEpisode(parseInt(propEpisode, 10) || 1);
     }
-  }, [propSeason, propEpisode, routeInitialEpisode]);
+  }, [propId, propSeason, propEpisode, routeInitialEpisode]);
 
   const fetchSeason = useCallback(async (tvId, sNum, currentItem = item) => {
     setLoadingSeason(true);
@@ -275,7 +277,7 @@ export default function WatchPage({
 
           if (mediaType === 'movie') {
             const dubMatch = await DubIndoService.findDubIndoByTmdbId(cleanId).catch(() => null);
-            if (dubMatch?.streamUrl) {
+            if (dubMatch?.streamUrl && !DubIndoService.isBrokenUvideoHost(dubMatch.streamUrl)) {
               fullItem.hasDubIndo = true;
               fullItem.dubStreamUrl = dubMatch.streamUrl;
               fullItem.dubStreamBackupUrl = dubMatch.streamBackupUrl;
@@ -363,9 +365,35 @@ export default function WatchPage({
     };
   }, [resolvedSegTmdbId, isSeries, currentSeason, currentEpisode]);
 
-  // 2. Automatically extract direct CloudX .m3u8/.mp4 streams via /api/extract for pure native playback
+  const rawEpisodes = seasonData?.episodes || item?.episodesList || (Array.isArray(item?.episodes) ? item.episodes : []);
+  const episodesList = useMemo(() => {
+    if (Array.isArray(rawEpisodes) && rawEpisodes.length > 0) return rawEpisodes;
+    if (typeof item?.episodes === 'number' && item.episodes > 0) {
+      return Array.from({ length: item.episodes }, (_, i) => ({
+        episode_number: i + 1,
+        name: `Episode ${i + 1}`,
+        overview: `Episode ${i + 1} dari ${item?.title || 'Serial'} durasi penuh.`,
+        still_path: item?.backdrop_path || item?.poster_path,
+      }));
+    }
+    return [];
+  }, [rawEpisodes, item]);
+
+  const activeEpisodeDirectUrl = useMemo(() => {
+    if (!item) return '';
+    if (isSeries) {
+      const epObj = episodesList.find((e) => (e.episode_number || e.episode) === currentEpisode);
+      const u = activeDubEpisodeUrl || epObj?.streamUrl || '';
+      return DubIndoService.isBrokenUvideoHost(u) ? '' : u;
+    }
+    const u = item.directWasabiUrl || item.streamUrl || '';
+    return DubIndoService.isBrokenUvideoHost(u) ? '' : u;
+  }, [item, isSeries, episodesList, currentEpisode, activeDubEpisodeUrl]);
+
+  // 2. Automatically extract direct CloudX .m3u8/.mp4 streams via /api/extract (also rescues unavailable Dub/MovieBox links)
   useEffect(() => {
-    if (!metadataReady || !item || item.isDubIndo) {
+    const shouldSkipCloudxForDub = Boolean(item?.isDubIndo && activeEpisodeDirectUrl && !cloudxFallbackActive);
+    if (!metadataReady || !item || shouldSkipCloudxForDub) {
       setIsExtracting(false);
       return;
     }
@@ -426,21 +454,18 @@ export default function WatchPage({
       cancelled = true;
       controller.abort();
     };
-  }, [metadataReady, item?.id, item?.tmdbId, isSeries, currentSeason, currentEpisode, extractNonce]);
-
-  const rawEpisodes = seasonData?.episodes || item?.episodesList || (Array.isArray(item?.episodes) ? item.episodes : []);
-  const episodesList = useMemo(() => {
-    if (Array.isArray(rawEpisodes) && rawEpisodes.length > 0) return rawEpisodes;
-    if (typeof item?.episodes === 'number' && item.episodes > 0) {
-      return Array.from({ length: item.episodes }, (_, i) => ({
-        episode_number: i + 1,
-        name: `Episode ${i + 1}`,
-        overview: `Episode ${i + 1} dari ${item?.title || 'Serial'} durasi penuh.`,
-        still_path: item?.backdrop_path || item?.poster_path,
-      }));
-    }
-    return [];
-  }, [rawEpisodes, item]);
+  }, [
+    metadataReady,
+    item?.id,
+    item?.tmdbId,
+    item?.isDubIndo,
+    activeEpisodeDirectUrl,
+    cloudxFallbackActive,
+    isSeries,
+    currentSeason,
+    currentEpisode,
+    extractNonce,
+  ]);
 
   // Resolve distinct per-episode playable stream for grouped Dub Indo Series
   useEffect(() => {
@@ -451,7 +476,7 @@ export default function WatchPage({
     }
     const matchedEp = episodesList.find((e) => (e.episode_number || e.episode) === currentEpisode);
     const rawEpUrl = matchedEp?.streamUrl || '';
-    if (!rawEpUrl) {
+    if (!rawEpUrl || DubIndoService.isBrokenUvideoHost(rawEpUrl)) {
       setActiveDubEpisodeUrl('');
       return;
     }
@@ -475,8 +500,8 @@ export default function WatchPage({
 
     const matchedEp = episodesList.find((e) => (e.episode_number || e.episode) === currentEpisode);
 
-    // Dub Indo Direct MP4 mirrors
-    if (item.isDubIndo) {
+    // Dub Indo Direct MP4 mirrors (skip broken uvideoweb or when runtime fallback switched to CloudX)
+    if (item.isDubIndo && !cloudxFallbackActive) {
       let baseUrl = matchedEp?.streamUrl || item.streamUrl || '';
       if (!matchedEp?.streamUrl && item.parts?.length > 0) {
         const partObj =
@@ -485,11 +510,12 @@ export default function WatchPage({
             : item.parts[(currentEpisode - 1) % item.parts.length] || item.parts[0];
         baseUrl = partObj?.url || item.streamUrl;
       }
+      if (DubIndoService.isBrokenUvideoHost(baseUrl)) baseUrl = '';
       const primaryResolved = isSeries ? activeDubEpisodeUrl : item.directWasabiUrl;
-      if (primaryResolved) {
+      if (primaryResolved && !DubIndoService.isBrokenUvideoHost(primaryResolved)) {
         list.push({
           id: `dub_wasabi_ep_${currentEpisode}`,
-          label: '🇮🇩 Dub Indo Direct (Wasabi HD)',
+          label: '🇮🇩 Dub Indo Direct (HD)',
           url: primaryResolved,
           type: 'mp4',
           provider: 'dubindo',
@@ -506,7 +532,7 @@ export default function WatchPage({
           providerLabel: 'Dub Indo Mirror',
         });
       }
-      if (!isSeries && item.streamBackupUrl && item.streamBackupUrl !== baseUrl) {
+      if (!isSeries && item.streamBackupUrl && !DubIndoService.isBrokenUvideoHost(item.streamBackupUrl) && item.streamBackupUrl !== baseUrl) {
         list.push({
           id: 'dub_backup',
           label: '🇮🇩 Dub Indo CDN Backup',
@@ -516,10 +542,21 @@ export default function WatchPage({
           providerLabel: 'Dub Indo CDN',
         });
       }
+      for (const cs of cloudXStreams) {
+        list.push(cs);
+      }
       return list;
     }
 
-    // MovieBox Direct MP4 if item has local direct URL
+    // Dub Indo fallback after direct MP4 failure
+    if (item.isDubIndo && cloudxFallbackActive) {
+      for (const cs of cloudXStreams) {
+        list.push(cs);
+      }
+      return list;
+    }
+
+    // MovieBox Direct MP4 if item has valid direct URL (skip broken uvideoweb)
     let mbUrl = matchedEp?.streamUrl || item.streamUrl || '';
     if (!matchedEp?.streamUrl && item.parts?.length > 0) {
       const partObj =
@@ -527,6 +564,9 @@ export default function WatchPage({
           ? item.parts.find((p) => p.part === selectedPart) || item.parts[0]
           : item.parts[(currentEpisode - 1) % item.parts.length] || item.parts[0];
       mbUrl = partObj?.url || item.streamUrl;
+    }
+    if (cloudxFallbackActive || DubIndoService.isBrokenUvideoHost(mbUrl)) {
+      mbUrl = '';
     }
     if (mbUrl) {
       list.push({
@@ -544,8 +584,8 @@ export default function WatchPage({
       list.push(cs);
     }
 
-    // Dub Indo alternate audio track if TMDB movie also has Dub Indo match
-    if (item.hasDubIndo && item.dubStreamUrl && item.dubStreamUrl !== mbUrl) {
+    // Dub Indo alternate audio track if TMDB movie also has working Dub Indo match
+    if (item.hasDubIndo && item.dubStreamUrl && !DubIndoService.isBrokenUvideoHost(item.dubStreamUrl) && item.dubStreamUrl !== mbUrl) {
       list.push({
         id: 'dub_alt',
         label: '🇮🇩 Audio Dubbing Indonesia',
@@ -557,7 +597,7 @@ export default function WatchPage({
     }
 
     return list;
-  }, [item, episodesList, currentEpisode, selectedPart, cloudXStreams, isSeries, activeDubEpisodeUrl]);
+  }, [item, episodesList, currentEpisode, selectedPart, cloudXStreams, isSeries, activeDubEpisodeUrl, cloudxFallbackActive]);
 
   useEffect(() => {
     if (activeStreamIndex >= directStreams.length && directStreams.length > 0) {
@@ -689,6 +729,7 @@ export default function WatchPage({
           isExtracting={isExtracting}
           extractError={extractError}
           onRetryExtract={() => setExtractNonce((n) => n + 1)}
+          onFallbackExtract={() => setCloudxFallbackActive(true)}
           onBackToDetail={() =>
             navigate(`/${isSeries ? 'tv' : 'movie'}/${item.tmdbId || propId}`, { state: { item } })
           }

@@ -45,12 +45,9 @@ async function refreshContainerToken(embedUrl, ref) {
 
   const job = (async () => {
     try {
-      const extracted = await extractDirectMediaFromHost(embedUrl, ref, { skipVerify: true });
+      const extracted = await extractDirectMediaFromHost(embedUrl, ref, { skipVerify: false });
       const candidates = extracted?.streams || [];
-      const best =
-        candidates.find((s) => s.type === 'hls' && /\/hls2\//i.test(s.url)) ||
-        candidates.find((s) => s.type === 'hls') ||
-        candidates[0];
+      const best = candidates.find((s) => s.type === 'hls') || candidates[0];
       if (!best?.url) return null;
 
       const fresh = await assertPublicHttpUrl(best.url);
@@ -80,8 +77,17 @@ async function refreshContainerToken(embedUrl, ref) {
 function applyContainerToken(targetUrlObj, tokenInfo) {
   if (!tokenInfo) return targetUrlObj;
   try {
-    if (/\/stream\//i.test(targetUrlObj.pathname) && /master\.m3u8$/i.test(targetUrlObj.pathname) && tokenInfo.fullUrl) {
-      return new URL(tokenInfo.fullUrl);
+    if (
+      /\/stream\//i.test(targetUrlObj.pathname) &&
+      /\.m3u8$/i.test(targetUrlObj.pathname) &&
+      tokenInfo.fullUrl
+    ) {
+      const freshUrl = new URL(tokenInfo.fullUrl);
+      const targetFile = targetUrlObj.pathname.split('/').pop();
+      if (targetFile && targetFile !== 'master.m3u8' && /\/stream\//i.test(freshUrl.pathname)) {
+        freshUrl.pathname = freshUrl.pathname.replace(/\/[^/]+$/, `/${targetFile}`);
+      }
+      return freshUrl;
     }
     const rebuilt = new URL(targetUrlObj.href);
     if (tokenInfo.origin && /\/hls2\//i.test(rebuilt.pathname)) {
@@ -246,32 +252,47 @@ export async function GET(request) {
       }
     }
 
-    let upstream = await safeFetch(
-      activeTarget.href,
-      {
-        method: 'GET',
-        headers: upstreamHeaders,
-        signal: AbortSignal.timeout(15000),
-      },
-      4
-    );
+    const fetchOnce = (href) =>
+      safeFetch(
+        href,
+        {
+          method: 'GET',
+          headers: upstreamHeaders,
+          signal: AbortSignal.timeout(9500),
+        },
+        4
+      );
 
-    if (upstream.status === 403 && embParam) {
-      if (upstream.body) upstream.body.cancel().catch(() => {});
+    let upstream = null;
+    let firstErr = null;
+    try {
+      upstream = await fetchOnce(activeTarget.href);
+    } catch (err) {
+      firstErr = err;
+    }
+
+    const shouldRefreshToken =
+      Boolean(embParam) &&
+      (Boolean(firstErr) ||
+        upstream?.status === 403 ||
+        upstream?.status === 404 ||
+        upstream?.status === 410 ||
+        upstream?.status === 502 ||
+        upstream?.status === 503);
+
+    if (shouldRefreshToken) {
+      if (upstream?.body) upstream.body.cancel().catch(() => {});
       const freshToken = await refreshContainerToken(embParam, safeRef);
       if (freshToken) {
         const refreshedUrl = applyContainerToken(parsedTarget, freshToken);
         activeTarget = await assertPublicHttpUrl(refreshedUrl.href);
-        upstream = await safeFetch(
-          activeTarget.href,
-          {
-            method: 'GET',
-            headers: upstreamHeaders,
-            signal: AbortSignal.timeout(15000),
-          },
-          4
-        );
+        upstream = await fetchOnce(activeTarget.href);
+        firstErr = null;
       }
+    }
+
+    if (firstErr) {
+      throw firstErr;
     }
 
     if (!upstream.ok && upstream.status !== 206) {

@@ -172,10 +172,10 @@ export async function GET(request) {
       }
     }
 
-    const selectedProviders = orderedKeys.slice(0, 5);
+    const selectedProviders = orderedKeys.slice(0, 6);
     const params = { title, originalTitle, year, type, season, episode, tmdbId };
 
-    const providerResults = await raceProvidersWithGrace(selectedProviders, mirrors, params, 1200, 8000);
+    const providerResults = await raceProvidersWithGrace(selectedProviders, mirrors, params, 2600, 8500);
 
     const seenStreamUrls = new Set();
     const seenSubUrls = new Set();
