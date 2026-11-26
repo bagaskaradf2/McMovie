@@ -37,29 +37,46 @@ function getCachedToken(embedUrl) {
   return entry;
 }
 
-async function refreshContainerToken(embedUrl, ref, preferStreamPath = false) {
+async function refreshContainerToken(embedUrl, ref) {
   if (!embedUrl) return null;
-  const cacheKey = `${embedUrl}|${preferStreamPath ? 'stream' : 'any'}`;
-  if (inflightRefresh.has(cacheKey)) {
-    return inflightRefresh.get(cacheKey);
+  if (inflightRefresh.has(embedUrl)) {
+    return inflightRefresh.get(embedUrl);
   }
 
   const job = (async () => {
     try {
       const extracted = await extractDirectMediaFromHost(embedUrl, ref, { skipVerify: true });
       const candidates = extracted?.streams || [];
-      const best =
-        (preferStreamPath && candidates.find((s) => /\/stream\//i.test(s.url))) ||
-        candidates.find((s) => /\/stream\//i.test(s.url)) ||
-        candidates.find((s) => s.type === 'hls') ||
-        candidates[0];
-      if (!best?.url) return null;
+      const streamCand = candidates.find((s) => /\/stream\//i.test(s.url));
+      const hls2Cand = candidates.find((s) => /\/hls2\//i.test(s.url));
+      const fallbackCand = candidates.find((s) => s.type === 'hls') || candidates[0];
+      if (!streamCand && !hls2Cand && !fallbackCand) return null;
 
-      const fresh = await assertPublicHttpUrl(best.url);
+      let streamUrl = '';
+      if (streamCand?.url) {
+        const verifiedStream = await assertPublicHttpUrl(streamCand.url);
+        streamUrl = verifiedStream.href;
+      }
+
+      let hls2Origin = '';
+      let hls2Search = '';
+      if (hls2Cand?.url) {
+        const verifiedHls2 = await assertPublicHttpUrl(hls2Cand.url);
+        hls2Origin = verifiedHls2.origin;
+        hls2Search = verifiedHls2.search;
+      }
+
+      let fallbackUrl = '';
+      if (!streamUrl && !hls2Origin && fallbackCand?.url) {
+        const verifiedFallback = await assertPublicHttpUrl(fallbackCand.url);
+        fallbackUrl = verifiedFallback.href;
+      }
+
       const tokenEntry = {
-        origin: fresh.origin,
-        search: fresh.search,
-        fullUrl: fresh.href,
+        streamUrl,
+        hls2Origin,
+        hls2Search,
+        fallbackUrl,
         expiresAt: Date.now() + TOKEN_TTL_MS,
       };
       if (containerTokenCache.size >= TOKEN_CACHE_MAX) {
@@ -71,39 +88,49 @@ async function refreshContainerToken(embedUrl, ref, preferStreamPath = false) {
     } catch {
       return null;
     } finally {
-      inflightRefresh.delete(cacheKey);
+      inflightRefresh.delete(embedUrl);
     }
   })();
 
-  inflightRefresh.set(cacheKey, job);
+  inflightRefresh.set(embedUrl, job);
   return job;
 }
 
-function applyContainerToken(targetUrlObj, tokenInfo) {
+function applyContainerToken(targetUrlObj, tokenInfo, preferStreamFallback = false) {
   if (!tokenInfo) return targetUrlObj;
   try {
-    if (
-      /\/stream\//i.test(targetUrlObj.pathname) &&
-      /\.m3u8$/i.test(targetUrlObj.pathname) &&
-      tokenInfo.fullUrl
-    ) {
-      const freshUrl = new URL(tokenInfo.fullUrl);
+    if (/\/stream\//i.test(targetUrlObj.pathname) && /\.m3u8$/i.test(targetUrlObj.pathname) && tokenInfo.streamUrl) {
+      const freshUrl = new URL(tokenInfo.streamUrl);
       const targetFile = targetUrlObj.pathname.split('/').pop();
       if (targetFile && targetFile !== 'master.m3u8' && /\/stream\//i.test(freshUrl.pathname)) {
         freshUrl.pathname = freshUrl.pathname.replace(/\/[^/]+$/, `/${targetFile}`);
       }
       return freshUrl;
     }
-    const rebuilt = new URL(targetUrlObj.href);
-    if (tokenInfo.origin && /\/hls2\//i.test(rebuilt.pathname)) {
-      const freshOriginUrl = new URL(tokenInfo.origin);
-      rebuilt.protocol = freshOriginUrl.protocol;
-      rebuilt.host = freshOriginUrl.host;
+
+    if (/\/hls2\//i.test(targetUrlObj.pathname)) {
+      if (preferStreamFallback && tokenInfo.streamUrl && /master\.m3u8$/i.test(targetUrlObj.pathname)) {
+        return new URL(tokenInfo.streamUrl);
+      }
+      if (tokenInfo.hls2Origin) {
+        const rebuilt = new URL(targetUrlObj.href);
+        const freshOriginUrl = new URL(tokenInfo.hls2Origin);
+        rebuilt.protocol = freshOriginUrl.protocol;
+        rebuilt.host = freshOriginUrl.host;
+        if (tokenInfo.hls2Search) {
+          rebuilt.search = tokenInfo.hls2Search;
+        }
+        return rebuilt;
+      }
+      if (tokenInfo.streamUrl && /master\.m3u8$/i.test(targetUrlObj.pathname)) {
+        return new URL(tokenInfo.streamUrl);
+      }
     }
-    if (tokenInfo.search) {
-      rebuilt.search = tokenInfo.search;
+
+    if (tokenInfo.fallbackUrl && /master\.m3u8$/i.test(targetUrlObj.pathname)) {
+      return new URL(tokenInfo.fallbackUrl);
     }
-    return rebuilt;
+    return targetUrlObj;
   } catch {
     return targetUrlObj;
   }
@@ -288,9 +315,9 @@ export async function GET(request) {
 
     if (shouldRefreshToken) {
       if (upstream?.body) upstream.body.cancel().catch(() => {});
-      const freshToken = await refreshContainerToken(embParam, safeRef, isStreamPath);
+      const freshToken = await refreshContainerToken(embParam, safeRef);
       if (freshToken) {
-        const refreshedUrl = applyContainerToken(parsedTarget, freshToken);
+        const refreshedUrl = applyContainerToken(parsedTarget, freshToken, !isStreamPath);
         activeTarget = await assertPublicHttpUrl(refreshedUrl.href);
         upstream = await fetchOnce(activeTarget.href, 8500);
         firstErr = null;

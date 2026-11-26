@@ -175,7 +175,7 @@ export async function GET(request) {
     const selectedProviders = orderedKeys.slice(0, 6);
     const params = { title, originalTitle, year, type, season, episode, tmdbId };
 
-    const providerResults = await raceProvidersWithGrace(selectedProviders, mirrors, params, 2600, 8500);
+    const providerResults = await raceProvidersWithGrace(selectedProviders, mirrors, params, 2600, 9000);
 
     const seenStreamUrls = new Set();
     const seenSubUrls = new Set();
@@ -254,7 +254,7 @@ export async function GET(request) {
     return Response.json(payload, {
       headers: {
         ...cors.headers,
-        'Cache-Control': 's-maxage=300, stale-while-revalidate=600',
+        'Cache-Control': streams.length > 0 ? 's-maxage=120, stale-while-revalidate=300' : 'no-store',
       },
     });
   } catch (err) {

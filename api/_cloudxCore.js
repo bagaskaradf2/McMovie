@@ -332,12 +332,13 @@ async function verifyHlsPlayable(stream) {
   const hdr = { 'User-Agent': USER_AGENT, Referer: stream.referer, ...(origin ? { Origin: origin } : {}) };
   const pr = await fetch(stream.url, {
     headers: hdr,
-    signal: AbortSignal.timeout(2500),
+    signal: AbortSignal.timeout(1800),
   });
   if (!pr.ok) return null;
 
   const masterText = await pr.text();
   if (!masterText.trimStart().startsWith('#EXTM3U')) return null;
+  if (/cdnsync\.cloud/i.test(masterText)) return null;
 
   const lines = masterText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   if (lines.length === 0) return null;
@@ -350,11 +351,12 @@ async function verifyHlsPlayable(stream) {
     const childUrl = new URL(firstEntry, mediaBaseUrl).href;
     const cr = await fetch(childUrl, {
       headers: hdr,
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(1800),
     });
     if (!cr.ok) return null;
     mediaText = await cr.text();
     if (!mediaText.trimStart().startsWith('#EXTM3U')) return null;
+    if (/cdnsync\.cloud/i.test(mediaText)) return null;
     mediaBaseUrl = cr.url || childUrl;
   }
 
@@ -365,13 +367,13 @@ async function verifyHlsPlayable(stream) {
   let sr = await fetch(segUrl, {
     method: 'HEAD',
     headers: hdr,
-    signal: AbortSignal.timeout(2200),
+    signal: AbortSignal.timeout(1600),
   });
   if (sr.status === 405 || sr.status === 501) {
     sr = await fetch(segUrl, {
       method: 'GET',
       headers: { ...hdr, Range: 'bytes=0-63' },
-      signal: AbortSignal.timeout(2200),
+      signal: AbortSignal.timeout(1600),
     });
   }
   return sr.ok || sr.status === 206 ? stream : null;
