@@ -361,8 +361,8 @@ export default function CinemaPlayer({
         backBufferLength: 30,
         maxBufferHole: 0.5,
         startLevel: -1,
-        manifestLoadingTimeOut: 10000,
-        levelLoadingTimeOut: 10000,
+        manifestLoadingTimeOut: 15000,
+        levelLoadingTimeOut: 12000,
         fragLoadingTimeOut: 15000,
       });
       hlsRef.current = hls;
@@ -398,8 +398,10 @@ export default function CinemaPlayer({
         if (
           data.type === Hls.ErrorTypes.NETWORK_ERROR &&
           !triedDirectRef.current &&
+          !activeStream.preferProxy &&
           activeStream.url &&
-          activeStream.url !== activeStream.proxyUrl
+          activeStream.url !== activeStream.proxyUrl &&
+          !/playerwish|morencius|imaxstreams|swishsrv/i.test(activeStream.url)
         ) {
           triedDirectRef.current = true;
           startHls(activeStream.url);

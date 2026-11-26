@@ -37,17 +37,22 @@ function getCachedToken(embedUrl) {
   return entry;
 }
 
-async function refreshContainerToken(embedUrl, ref) {
+async function refreshContainerToken(embedUrl, ref, preferStreamPath = false) {
   if (!embedUrl) return null;
-  if (inflightRefresh.has(embedUrl)) {
-    return inflightRefresh.get(embedUrl);
+  const cacheKey = `${embedUrl}|${preferStreamPath ? 'stream' : 'any'}`;
+  if (inflightRefresh.has(cacheKey)) {
+    return inflightRefresh.get(cacheKey);
   }
 
   const job = (async () => {
     try {
-      const extracted = await extractDirectMediaFromHost(embedUrl, ref, { skipVerify: false });
+      const extracted = await extractDirectMediaFromHost(embedUrl, ref, { skipVerify: true });
       const candidates = extracted?.streams || [];
-      const best = candidates.find((s) => s.type === 'hls') || candidates[0];
+      const best =
+        (preferStreamPath && candidates.find((s) => /\/stream\//i.test(s.url))) ||
+        candidates.find((s) => /\/stream\//i.test(s.url)) ||
+        candidates.find((s) => s.type === 'hls') ||
+        candidates[0];
       if (!best?.url) return null;
 
       const fresh = await assertPublicHttpUrl(best.url);
@@ -66,11 +71,11 @@ async function refreshContainerToken(embedUrl, ref) {
     } catch {
       return null;
     } finally {
-      inflightRefresh.delete(embedUrl);
+      inflightRefresh.delete(cacheKey);
     }
   })();
 
-  inflightRefresh.set(embedUrl, job);
+  inflightRefresh.set(cacheKey, job);
   return job;
 }
 
@@ -252,13 +257,14 @@ export async function GET(request) {
       }
     }
 
-    const fetchOnce = (href) =>
+    const isStreamPath = /\/stream\//i.test(parsedTarget.pathname);
+    const fetchOnce = (href, timeoutMs = 8500) =>
       safeFetch(
         href,
         {
           method: 'GET',
           headers: upstreamHeaders,
-          signal: AbortSignal.timeout(9500),
+          signal: AbortSignal.timeout(timeoutMs),
         },
         4
       );
@@ -266,7 +272,7 @@ export async function GET(request) {
     let upstream = null;
     let firstErr = null;
     try {
-      upstream = await fetchOnce(activeTarget.href);
+      upstream = await fetchOnce(activeTarget.href, embParam && isStreamPath ? 3800 : 8500);
     } catch (err) {
       firstErr = err;
     }
@@ -282,11 +288,11 @@ export async function GET(request) {
 
     if (shouldRefreshToken) {
       if (upstream?.body) upstream.body.cancel().catch(() => {});
-      const freshToken = await refreshContainerToken(embParam, safeRef);
+      const freshToken = await refreshContainerToken(embParam, safeRef, isStreamPath);
       if (freshToken) {
         const refreshedUrl = applyContainerToken(parsedTarget, freshToken);
         activeTarget = await assertPublicHttpUrl(refreshedUrl.href);
-        upstream = await fetchOnce(activeTarget.href);
+        upstream = await fetchOnce(activeTarget.href, 8500);
         firstErr = null;
       }
     }
